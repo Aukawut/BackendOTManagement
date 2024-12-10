@@ -76,6 +76,11 @@ func main() {
 	//<---- Group Workcell ----->
 	app.Get("/workgroup", jwt.DecodeToken, handler.GetAllGroupWorkcell)
 
+	//<--- Plan ---->
+	app.Get("/plan/main", jwt.DecodeToken, handler.GetAllMainPlan)
+	app.Post("/plan/main", jwt.DecodeToken, handler.AddMainPlan)
+	app.Put("/plan/main/:id", jwt.DecodeToken, handler.UpdateMainPlan)
+
 	PORT := os.Getenv("PORT")
 
 	if PORT == "" {

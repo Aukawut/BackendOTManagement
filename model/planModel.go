@@ -1,10 +1,11 @@
 package model
 
 type MainPlan struct {
-	FactoryID int `json:"factory"`
-	Month     int `json:"month"`
-	Year      int `json:"year"`
-	Hours     int `json:"hours"`
+	FactoryID int    `json:"factory"`
+	Month     int    `json:"month"`
+	Year      int    `json:"year"`
+	Hours     int    `json:"hours"`
+	ActionBy  string `json:"action"`
 }
 
 type ResultMainPlan struct {

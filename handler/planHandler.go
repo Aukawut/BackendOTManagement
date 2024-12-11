@@ -65,11 +65,12 @@ func AddMainPlan(c *fiber.Ctx) error {
 		return c.JSON(fiber.Map{"err": true, "msg": "Plan is duplicated!"})
 	}
 
-	_, errInsert := db.Exec(`INSERT INTO TBL_PLAN_OVERTIME (ID_FACTORY,[MONTH],[YEAR],[HOURS]) VALUES (@factory,@m,@y,@amount)`,
+	_, errInsert := db.Exec(`INSERT INTO TBL_PLAN_OVERTIME (ID_FACTORY,[MONTH],[YEAR],[HOURS],[CREATED_BY],[STATUS_ACTIVE]) VALUES (@factory,@m,@y,@amount,@action,'Y')`,
 		sql.Named("factory", req.FactoryID),
 		sql.Named("m", req.Month),
 		sql.Named("y", req.Year),
 		sql.Named("amount", req.Hours),
+		sql.Named("action", req.ActionBy),
 	)
 
 	defer rows.Close()
@@ -104,7 +105,8 @@ func GetAllMainPlan(c *fiber.Ctx) error {
 	rows, err := db.Query(`SELECT mp.ID_PLAN,mp.ID_FACTORY,f.FACTORY_NAME,mp.CREATED_AT,mp.[MONTH],
 	mp.[YEAR],mp.[HOURS],mp.UPDATED_AT,hr.UHR_FirstName_th as FNAME FROM TBL_PLAN_OVERTIME mp 
 	LEFT JOIN TBL_FACTORY f ON mp.ID_FACTORY = f.ID_FACTORY 
-	LEFT JOIN V_AllUserPSTH hr ON mp.CREATED_BY COLLATE Thai_CI_AS = hr.UHR_EmpCode COLLATE Thai_CI_AS 
+	LEFT JOIN V_AllUserPSTH hr ON mp.CREATED_BY COLLATE Thai_CI_AS = hr.UHR_EmpCode COLLATE Thai_CI_AS
+	WHERE mp.STATUS_ACTIVE = 'Y' 
 	ORDER BY [YEAR],[MONTH],ID_FACTORY DESC`)
 
 	if err != nil {
@@ -196,12 +198,13 @@ func UpdateMainPlan(c *fiber.Ctx) error {
 		return c.JSON(fiber.Map{"err": true, "msg": "Plan is duplicated!"})
 	}
 
-	_, errInsert := db.Exec(`UPDATE TBL_PLAN_OVERTIME SET ID_FACTORY = @factory,[MONTH] = @m,[YEAR] = @y,[HOURS] =  @amount,[UPDATED_AT] = GETDATE() WHERE [ID_PLAN] = @id`,
+	_, errInsert := db.Exec(`UPDATE TBL_PLAN_OVERTIME SET ID_FACTORY = @factory,[MONTH] = @m,[YEAR] = @y,[HOURS] =  @amount,[UPDATED_AT] = GETDATE(),[UPDATED_BY] = @action WHERE [ID_PLAN] = @id`,
 		sql.Named("factory", req.FactoryID),
 		sql.Named("m", req.Month),
 		sql.Named("y", req.Year),
 		sql.Named("amount", req.Hours),
 		sql.Named("id", id),
+		sql.Named("action", req.ActionBy),
 	)
 
 	defer rows.Close()

@@ -81,3 +81,13 @@ type ListUserByRequest struct {
 	FULLNAME      string
 	POSITION      interface{}
 }
+
+type UserType struct {
+	ID_UTYPE   int
+	NAME_UTYPE string
+}
+
+type UserGroup struct {
+	ID_UGROUP   int
+	NAME_UGROUP string
+}

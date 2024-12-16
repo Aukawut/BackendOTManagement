@@ -1038,7 +1038,7 @@ func GetRequestListByCodeAndStatus(c *fiber.Ctx) error {
 	}
 
 	query := `SELECT REQUEST_NO,CODE_APPROVER,REV,FACTORY_NAME,NAME_GROUP,ID_FACTORY,ID_GROUP_DEPT,COUNT_USER,DURATION,HOURS_AMOUNT,SUM_MINUTE,MINUTE_TOTAL  
-				FROM FUNC_GETLISTS_STATUS_AND_EMPC(@code, @status) a
+				FROM [dbo].[Func_GetLists_Status_And_Empc] (@code, @status) a
 				ORDER BY REQUEST_NO`
 
 	results, errorQuery := db.Query(query, sql.Named("code", empCode), sql.Named("status", status)) //Query

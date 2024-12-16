@@ -523,3 +523,62 @@ WHERE u.REQUEST_NO = @reqNo AND u.REV = @rev ORDER BY EMPLOYEE_CODE ASC`
 		})
 	}
 }
+
+func GetUserType(c *fiber.Ctx) error {
+	info := []model.UserType{}
+
+	connString := config.LoadDatabaseConfig()
+
+	db, err := sql.Open("sqlserver", connString)
+
+	if err != nil {
+		fmt.Println("Error creating connection: " + err.Error())
+	}
+	defer db.Close()
+
+	// Test connection
+	err = db.Ping()
+	if err != nil {
+		fmt.Println("Error connecting to the database: " + err.Error())
+	}
+
+	query := `SELECT [ID_UTYPE],[NAME_UTYPE] ,[CREATED_AT],[UPDATED_AT] FROM [DB_OT_MANAGEMENT].[dbo].[TBL_UTYPE]`
+
+	results, errorQuery := db.Query(query) //Query
+
+	if errorQuery != nil {
+		fmt.Println("Query failed: " + errorQuery.Error())
+	}
+
+	for results.Next() {
+		var result model.UserType
+
+		errScan := results.Scan(
+			&result.ID_UTYPE,
+			&result.NAME_UTYPE,
+		) // Scan เก็บข้อมูลใน Struct
+
+		if errScan != nil {
+			fmt.Println("Row scan failed: " + errScan.Error())
+
+		} else {
+			info = append(info, result)
+		}
+	}
+
+	defer results.Close()
+
+	if len(info) > 0 {
+		return c.JSON(fiber.Map{
+			"err":     false,
+			"status":  "Ok",
+			"results": info,
+		})
+	} else {
+		return c.JSON(fiber.Map{
+			"err":     true,
+			"msg":     "Not Found",
+			"results": info,
+		})
+	}
+}

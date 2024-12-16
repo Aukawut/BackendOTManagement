@@ -47,6 +47,8 @@ func main() {
 	// --- Users Route ---
 	app.Get("/users/group/:id/:factory", jwt.DecodeToken, handler.GetUserInfoByGroupId)
 	app.Get("/users/factory/:factory", jwt.DecodeToken, handler.GetUserByFactory)
+	app.Get("/users/ugroup", jwt.DecodeToken, handler.GetUserGroup)
+	app.Get("/users/type", jwt.DecodeToken, handler.GetUserType)
 	app.Get("/approver/group/:id/:factory", jwt.DecodeToken, handler.GetApproverByGroupId)
 	app.Get("/approver", jwt.DecodeToken, handler.GetAllApprover)
 	app.Post("/approver", jwt.DecodeTokenAdmin, handler.InsertApprover)
@@ -71,7 +73,9 @@ func main() {
 	app.Get("/factory/:group", jwt.DecodeToken, handler.GetAllFactoryByGroup)
 
 	//<---- Workcell ----->
+	app.Get("/workcell/", jwt.DecodeToken, handler.GetWorkCellByAll)
 	app.Get("/workcell/:group", jwt.DecodeToken, handler.GetWorkCellByGroup)
+	app.Get("/workcell/factory/:id", jwt.DecodeToken, handler.GetWorkcellByFactory)
 
 	//<---- Group Workcell ----->
 	app.Get("/workgroup", jwt.DecodeToken, handler.GetAllGroupWorkcell)
@@ -80,6 +84,16 @@ func main() {
 	app.Get("/plan/main", jwt.DecodeToken, handler.GetAllMainPlan)
 	app.Post("/plan/main", jwt.DecodeToken, handler.AddMainPlan)
 	app.Put("/plan/main/:id", jwt.DecodeToken, handler.UpdateMainPlan)
+	app.Get("/plan/workcell/:year/:month/:id", jwt.DecodeToken, handler.GetPlanByWorkcell)
+	app.Get("/plan/factory/:year/:month/:id", jwt.DecodeToken, handler.GetPlanByFactory)
+	app.Delete("/plan/:id", jwt.DecodeToken, handler.DeletePlan)
+
+	// Actual
+	app.Post("/actual/overtime", jwt.DecodeToken, handler.SaveActualOvertime)
+
+	app.Post("/permission/user", jwt.DecodeTokenAdmin, handler.InsertUserPermission)
+	app.Put("/permission/user/:id", jwt.DecodeTokenAdmin, handler.UpdateUserPermission)
+	app.Delete("/permission/user/:id", jwt.DecodeTokenAdmin, handler.DeleteUserPermission)
 
 	PORT := os.Getenv("PORT")
 

@@ -94,7 +94,8 @@ func DecodeToken(c *fiber.Ctx) error {
 
 	if !strings.HasPrefix(authHeader, "Bearer ") {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-			"error": "Authorization header must start with 'Bearer '",
+			"err": true,
+			"msg": "Authorization header must start with 'Bearer '",
 		})
 	}
 
@@ -103,7 +104,7 @@ func DecodeToken(c *fiber.Ctx) error {
 
 	if errToken != nil {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-			"error": errToken.Error(),
+			"msg": errToken.Error(),
 		})
 	}
 
@@ -118,7 +119,8 @@ func DecodeTokenAdmin(c *fiber.Ctx) error {
 
 	if !strings.HasPrefix(authHeader, "Bearer ") {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-			"error": "Authorization header must start with 'Bearer '",
+			"err": true,
+			"msg": "Authorization header must start with 'Bearer '",
 		})
 	}
 
@@ -127,14 +129,16 @@ func DecodeTokenAdmin(c *fiber.Ctx) error {
 
 	if errToken != nil {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-			"error": errToken.Error(),
+			"err": true,
+			"msg": errToken.Error(),
 		})
 	}
 
 	roleData, ok := decoded["role"]
 	if !ok {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Role not found in user data",
+			"err": true,
+			"msg": "Role not found in user data",
 		})
 	}
 
@@ -142,7 +146,8 @@ func DecodeTokenAdmin(c *fiber.Ctx) error {
 
 	if !ok {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Invalid role data format",
+			"err": true,
+			"msg": "Invalid role data format",
 		})
 	}
 

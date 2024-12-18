@@ -1194,7 +1194,7 @@ func SummaryLastRevRequestAllByReqNo(c *fiber.Ctx) error {
 	}
 
 	query := `SELECT r.REQUEST_NO,h.REV ,s.NAME_STATUS,hr.UHR_FullName_th as FULLNAME,tot.HOURS_AMOUNT as OT_TYPE,f.FACTORY_NAME,wg.NAME_WORKGRP,
-	wc.NAME_WORKCELL,us.USERS as USERS_AMOUNT,mi.SUM_MINUTE,r.START_DATE,r.END_DATE FROM  [dbo].[TBL_REQUESTS] r LEFT JOIN 
+	wc.NAME_WORKCELL,us.USERS as USERS_AMOUNT,mi.SUM_MINUTE,r.START_DATE,r.END_DATE,f.ID_FACTORY,ISNULL(pln.SUM_PLAN,0) as [SUM_PLAN],ISNULL(pln.SUM_PLAN_OB,0) as [SUM_PLAN_OB],wc.ID_WORK_CELL FROM  [dbo].[TBL_REQUESTS] r LEFT JOIN 
 	(SELECT MAX(REV) as REV,REQUEST_NO FROM TBL_REQUESTS_HISTORY GROUP BY REQUEST_NO) h ON
 	r.REQUEST_NO = h.REQUEST_NO
 	LEFT JOIN TBL_REQ_STATUS s ON r.REQ_STATUS = s.ID_STATUS
@@ -1207,7 +1207,21 @@ func SummaryLastRevRequestAllByReqNo(c *fiber.Ctx) error {
 	    FROM TBL_USERS_REQ GROUP BY REQUEST_NO,REV) us ON r.REQUEST_NO = us.REQUEST_NO AND h.REV = us.REV
 	LEFT JOIN   (SELECT uq.REQUEST_NO,uq.REV,SUM(m.MINUTE_DIFF) as SUM_MINUTE FROM TBL_USERS_REQ uq  
 	LEFT JOIN (SELECT REQUEST_NO,REV,DATEDIFF(MINUTE,START_DATE,END_DATE) as MINUTE_DIFF FROM TBL_REQUESTS_HISTORY hh) m 
-   ON uq.REQUEST_NO = m.REQUEST_NO AND uq.REV = m.REV GROUP BY uq.REQUEST_NO,uq.REV) mi ON r.REQUEST_NO = mi.REQUEST_NO AND h.REV = mi.REV WHERE r.REQUEST_NO = @reqNo
+   ON uq.REQUEST_NO = m.REQUEST_NO AND uq.REV = m.REV GROUP BY uq.REQUEST_NO,uq.REV) mi ON r.REQUEST_NO = mi.REQUEST_NO AND h.REV = mi.REV
+	LEFT JOIN (
+	
+   SELECT ISNULL(pwc.ID_FACTORY,pp.ID_FACTORY) as ID_FACTORY,ISNULL(pp.SUM_PLAN_OB,0) as [SUM_PLAN_OB],ISNULL(pwc.SUM_PLAN,0) as [SUM_PLAN],
+   ISNULL(pp.[YEAR],pwc.[YEAR]) as [YEAR],ISNULL(pp.[MONTH],pwc.[MONTH]) as [MONTH] FROM (
+   SELECT SUM(HOURS) as SUM_PLAN,f.ID_FACTORY,YEAR,MONTH FROM TBL_PLAN_OVERTIME  po
+   LEFT JOIN TBL_WORKCELL wc ON wc.ID_WORK_CELL = po.ID_WORK_CELL
+   LEFT JOIN TBL_FACTORY f ON f.ID_FACTORY = wc.ID_FACTORY
+   GROUP BY YEAR,MONTH,f.ID_FACTORY ) pwc
+   FULL JOIN (
+   SELECT SUM(HOURS) as SUM_PLAN_OB,pob.ID_FACTORY,pob.YEAR,pob.MONTH FROM TBL_PLAN_OB pob GROUP BY pob.ID_FACTORY,pob.YEAR,pob.MONTH )
+	pp ON pwc.ID_FACTORY = pp.ID_FACTORY AND pwc.YEAR = pp.YEAR AND pwc.MONTH = pp.MONTH
+	)pln ON r.ID_FACTORY = pln.ID_FACTORY AND YEAR(r.START_DATE) = pln.[YEAR] AND MONTH(r.START_DATE) = pln.[MONTH]
+
+   WHERE r.REQUEST_NO = @reqNo
    ORDER BY r.REQUEST_NO DESC`
 
 	results, errorQuery := db.Query(query, sql.Named("reqNo", reqNo)) //Query
@@ -1232,6 +1246,84 @@ func SummaryLastRevRequestAllByReqNo(c *fiber.Ctx) error {
 			&result.SUM_MINUTE,
 			&result.START_DATE,
 			&result.END_DATE,
+			&result.ID_FACTORY,
+			&result.SUM_PLAN,
+			&result.SUM_PLAN_OB,
+			&result.ID_WORK_CELL,
+		) // Scan เก็บข้อมูลใน Struct
+
+		if errScan != nil {
+			fmt.Println("Row scan failed: " + errScan.Error())
+
+		} else {
+			info = append(info, result)
+		}
+	}
+
+	defer results.Close()
+
+	if len(info) > 0 {
+		return c.JSON(fiber.Map{
+			"err":     false,
+			"status":  "Ok",
+			"results": info,
+		})
+	} else {
+		return c.JSON(fiber.Map{
+			"err":     true,
+			"msg":     "Not Found",
+			"results": info,
+		})
+	}
+}
+
+func GetApproverCommentByRequestNo(c *fiber.Ctx) error {
+	info := []model.RequestCommentApprover{}
+	reqNo := c.Params("requestNo")
+	rev := c.Params("rev")
+
+	connString := config.LoadDatabaseConfig()
+
+	db, err := sql.Open("sqlserver", connString)
+
+	if err != nil {
+		fmt.Println("Error creating connection: " + err.Error())
+	}
+	defer db.Close()
+
+	// Test connection
+	err = db.Ping()
+	if err != nil {
+		fmt.Println("Error connecting to the database: " + err.Error())
+	}
+
+	query := `SELECT a.REQUEST_NO,a.ID_STATUS_APV,a.CODE_APPROVER,a.CREATED_AT,a.UPDATED_AT,s.NAME_STATUS,
+a.REMARK,hr.UHR_Department as DEPARTMENT,hr.UHR_Position as POSITION,hr.UHR_FullName_th as FULLNAME FROM TBL_APPROVAL  a
+LEFT JOIN [dbo].[TBL_APPROVE_STATUS] s ON a.ID_STATUS_APV = s.ID_STATUS_APV
+LEFT JOIN V_AllUserPSTH hr ON a.CODE_APPROVER COLLATE Thai_CI_AS = hr.UHR_EmpCode COLLATE Thai_CI_AS
+WHERE REQUEST_NO = @reqNo AND REV = @rev 
+ORDER BY a.UPDATED_AT DESC`
+
+	results, errorQuery := db.Query(query, sql.Named("reqNo", reqNo), sql.Named("rev", rev)) //Query
+
+	if errorQuery != nil {
+		fmt.Println("Query failed: " + errorQuery.Error())
+	}
+
+	for results.Next() {
+		var result model.RequestCommentApprover
+
+		errScan := results.Scan(
+			&result.REQUEST_NO,
+			&result.ID_STATUS_APV,
+			&result.CODE_APPROVER,
+			&result.CREATED_AT,
+			&result.UPDATED_AT,
+			&result.NAME_STATUS,
+			&result.REMARK,
+			&result.DEPARTMENT,
+			&result.POSITION,
+			&result.FULLNAME,
 		) // Scan เก็บข้อมูลใน Struct
 
 		if errScan != nil {

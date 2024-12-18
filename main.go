@@ -36,6 +36,7 @@ func main() {
 	app.Get("/user/requests/:code", jwt.DecodeToken, handler.GetRequestByEmpCode)
 	app.Get("/summary/request/last/all", jwt.DecodeToken, handler.SummaryLastRevRequestAll)
 	app.Get("/summary/request/lasted/:reqNo", jwt.DecodeToken, handler.SummaryLastRevRequestAllByReqNo)
+	app.Get("/comment/request/:requestNo/:rev", jwt.DecodeToken, handler.GetApproverCommentByRequestNo)
 
 	app.Get("/pending/request/approver", jwt.DecodeToken, handler.GetApproverPending)
 	app.Get("/approve/count/:code", jwt.DecodeToken, handler.CountApproveStatusByCode)
@@ -45,6 +46,7 @@ func main() {
 	app.Post("/login", auth.LoginDomain)
 
 	// --- Users Route ---
+
 	app.Get("/users/group/:id/:factory", jwt.DecodeToken, handler.GetUserInfoByGroupId)
 	app.Get("/users/factory/:factory", jwt.DecodeToken, handler.GetUserByFactory)
 	app.Get("/users/ugroup", jwt.DecodeToken, handler.GetUserGroup)
@@ -88,12 +90,31 @@ func main() {
 	app.Get("/plan/factory/:year/:month/:id", jwt.DecodeToken, handler.GetPlanByFactory)
 	app.Delete("/plan/:id", jwt.DecodeToken, handler.DeletePlan)
 
+	//<---- Plan OB ---->
+	app.Get("/ob/plan", jwt.DecodeToken, handler.GetMainPlanOb)
+	app.Delete("/ob/plan/:id", jwt.DecodeToken, handler.DeletePlanOB)
+	app.Post("/ob/plan", jwt.DecodeToken, handler.AddPlanOB)
+	app.Put("/ob/plan/:id", jwt.DecodeToken, handler.UpdatePlanOB)
+
 	// Actual
 	app.Post("/actual/overtime", jwt.DecodeToken, handler.SaveActualOvertime)
+	app.Get("/actual/overtime", jwt.DecodeToken, handler.GetActualOvertime)
+	app.Get("/actual/summary/compare/plan/:year", jwt.DecodeToken, handler.SummaryActualComparePlan)
+	app.Get("/actual/summary/factory/plan/:start/:end/:ugroup", jwt.DecodeToken, handler.SummaryActualByDurationAndFac)
+	app.Get("/actual/count/:start/:end/:ugroup", jwt.DecodeToken, handler.GetCountActualOvertime)
+	app.Get("/actual/summary/date/:start/:end/:ugroup", jwt.DecodeToken, handler.SummaryActualByDate)
 
 	app.Post("/permission/user", jwt.DecodeTokenAdmin, handler.InsertUserPermission)
 	app.Put("/permission/user/:id", jwt.DecodeTokenAdmin, handler.UpdateUserPermission)
 	app.Delete("/permission/user/:id", jwt.DecodeTokenAdmin, handler.DeleteUserPermission)
+
+	app.Get("/employee", jwt.DecodeTokenAdmin, handler.GetEmployeeAll)
+	app.Post("/employee", jwt.DecodeTokenAdmin, handler.InsertEmployee)
+	app.Put("/employee/:code", jwt.DecodeTokenAdmin, handler.UpdateEmployee)
+	app.Delete("/employee/:code", jwt.DecodeTokenAdmin, handler.DeleteEmployee)
+	app.Get("/employee/:code", jwt.DecodeToken, handler.GetEmployeeByCode)
+
+	app.Get("/mail", handler.SendMailToApprover)
 
 	PORT := os.Getenv("PORT")
 

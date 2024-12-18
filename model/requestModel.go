@@ -98,4 +98,21 @@ type SummaryRequestLastRev struct {
 	SUM_MINUTE    int
 	START_DATE    string
 	END_DATE      string
+	ID_FACTORY    int
+	SUM_PLAN      float64
+	SUM_PLAN_OB   float64
+	ID_WORK_CELL  int
+}
+
+type RequestCommentApprover struct {
+	REQUEST_NO    string
+	ID_STATUS_APV interface{}
+	CODE_APPROVER interface{}
+	CREATED_AT    interface{}
+	UPDATED_AT    interface{}
+	NAME_STATUS   interface{}
+	REMARK        interface{}
+	DEPARTMENT    interface{}
+	POSITION      interface{}
+	FULLNAME      interface{}
 }

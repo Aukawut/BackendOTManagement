@@ -38,6 +38,8 @@ type Approver struct {
 	UHR_Position  string
 	STEP          int
 	ID_APPROVER   int
+	FACTORY_NAME  string
+	MAIL          string
 }
 
 type ApproverRequest struct {
@@ -90,4 +92,63 @@ type UserType struct {
 type UserGroup struct {
 	ID_UGROUP   int
 	NAME_UGROUP string
+}
+
+type EmployeeCode struct {
+	EMPLOYEE_CODE string
+}
+type Employee struct {
+	EMPLOYEE_CODE string
+	ID_FACTORY    int
+	GROUP_ID      int
+	PREFIX        string
+	FNAME_TH      string
+	LNAME_TH      string
+	FNAME_EN      string
+	LNAME_EN      string
+	ID_ROLE       int
+	TYPE_ID       int
+	ID_UGROUP     int
+	FACTORY_NAME  string
+	NAME_ROLE     string
+	NAME_GROUP    string
+	NAME_UGROUP   string
+	NAME_UTYPE    string
+	CREATED_AT    interface{}
+	UPDATED_AT    interface{}
+	UPDATED_BY    interface{}
+	CREATED_BY    interface{}
+}
+
+type BodyEmployee struct {
+	EmployeeCode string `json:"code"`
+	Factory      int    `json:"factory"`
+	Group        int    `json:"group"`
+	Prefix       string `json:"prefix"`
+	FnameTH      string `json:"fnameTH"`
+	LnameTH      string `json:"lnameTH"`
+	FnameEN      string `json:"fnameEN"`
+	LnameEN      string `json:"lnameEN"`
+	Role         int    `json:"role"`
+	Ugroup       int    `json:"ugroup"`
+	Type         int    `json:"type"`
+	ActionBy     string `json:"actionBy"`
+}
+
+type BodyUpdateEmployee struct {
+	Factory  int    `json:"factory"`
+	Group    int    `json:"group"`
+	Role     int    `json:"role"`
+	Ugroup   int    `json:"ugroup"`
+	Type     int    `json:"type"`
+	ActionBy string `json:"actionBy"`
+}
+
+type ResultEmployeeByCode struct {
+	Prefix       string
+	EmployeeCode string
+	FnameTH      string
+	LnameTH      string
+	FnameEN      string
+	LnameEN      string
 }

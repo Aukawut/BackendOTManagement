@@ -240,12 +240,13 @@ func GetApproverByGroupId(c *fiber.Ctx) error {
 		fmt.Println("Error connecting to the database: " + err.Error())
 	}
 
-	queryUser := `SELECT a.CODE_APPROVER,a.NAME_APPROVER,a.ID_GROUP_DEPT,g.NAME_GROUP,a.ROLE,hr.UHR_Position,a.STEP,a.[ID_APPROVER] FROM TBL_APPROVERS  a  
+	queryUser := `SELECT a.CODE_APPROVER,a.NAME_APPROVER,a.ID_GROUP_DEPT,g.NAME_GROUP,a.ROLE,hr.UHR_Position,a.STEP,a.[ID_APPROVER],f.FACTORY_NAME,hr.AD_Mail as MAIL FROM TBL_APPROVERS  a  
 				LEFT JOIN  V_AllUserPSTH hr ON a.CODE_APPROVER 
 				COLLATE Thai_CI_AS = HR.UHR_EmpCode COLLATE Thai_CI_AS 
 				LEFT JOIN TBL_GROUP_DEPT g ON a.ID_GROUP_DEPT = g.ID_GROUP_DEPT
+				LEFT JOIN TBL_FACTORY f ON a.ID_FACTORY = f.ID_FACTORY
 				WHERE a.ID_GROUP_DEPT = @groupId AND a.STATUS_ACTIVE = 'Y'  AND a.ID_FACTORY = @factory
-				ORDER BY a.STEP ASC`
+				ORDER BY a.STEP DESC`
 
 	results, errorQueryser := db.Query(queryUser, sql.Named("groupId", idGroup), sql.Named("factory", factory))
 
@@ -256,7 +257,7 @@ func GetApproverByGroupId(c *fiber.Ctx) error {
 	for results.Next() {
 		var user model.Approver
 
-		errScan := results.Scan(&user.CODE_APPROVER, &user.NAME_APPROVER, &user.ID_GROUP_DEPT, &user.NAME_GROUP, &user.ROLE, &user.UHR_Position, &user.STEP, &user.ID_APPROVER)
+		errScan := results.Scan(&user.CODE_APPROVER, &user.NAME_APPROVER, &user.ID_GROUP_DEPT, &user.NAME_GROUP, &user.ROLE, &user.UHR_Position, &user.STEP, &user.ID_APPROVER, &user.FACTORY_NAME, &user.MAIL)
 		if errScan != nil {
 			fmt.Println("Row scan failed: " + errScan.Error())
 
@@ -306,7 +307,7 @@ func GetAllApprover(c *fiber.Ctx) error {
 				COLLATE Thai_CI_AS = HR.UHR_EmpCode COLLATE Thai_CI_AS 
 				LEFT JOIN TBL_GROUP_DEPT g ON a.ID_GROUP_DEPT = g.ID_GROUP_DEPT
 				WHERE a.STATUS_ACTIVE = 'Y'
-				ORDER BY a.STEP ASC`
+				ORDER BY a.STEP DESC`
 
 	results, errorQueryser := db.Query(queryUser)
 
@@ -581,4 +582,373 @@ func GetUserType(c *fiber.Ctx) error {
 			"results": info,
 		})
 	}
+}
+
+func GetEmployeeAll(c *fiber.Ctx) error {
+	info := []model.Employee{}
+
+	connString := config.LoadDatabaseConfig()
+
+	db, err := sql.Open("sqlserver", connString)
+
+	if err != nil {
+		fmt.Println("Error creating connection: " + err.Error())
+	}
+	defer db.Close()
+
+	// Test connection
+	err = db.Ping()
+	if err != nil {
+		fmt.Println("Error connecting to the database: " + err.Error())
+	}
+
+	query := `SELECT e.EMPLOYEE_CODE,e.ID_FACTORY,e.GROUP_ID,e.PREFIX,e.FNAME_TH,e.LNAME_TH,e.FNAME_EN,e.LNAME_EN,e.ID_ROLE,e.TYPE_ID,e.ID_UGROUP,f.FACTORY_NAME,
+  r.NAME_ROLE,g.NAME_GROUP,ug.NAME_UGROUP,ut.NAME_UTYPE,e.CREATED_AT,e.CREATED_BY,e.UPDATED_AT,e.UPDATED_BY FROM TBL_EMPLOYEE e
+  LEFT JOIN TBL_FACTORY f ON e.ID_FACTORY = f.ID_FACTORY 
+  LEFT JOIN TBL_ROLE r ON e.ID_ROLE = r.ID_ROLE 
+  LEFT JOIN TBL_GROUP_DEPT g ON e.GROUP_ID = g.ID_GROUP_DEPT
+  LEFT JOIN TBL_UGROUP ug ON e.ID_UGROUP = ug.ID_UGROUP
+  LEFT JOIN TBL_UTYPE ut ON e.TYPE_ID = ut.ID_UTYPE ORDER BY f.FACTORY_NAME`
+
+	results, errorQuery := db.Query(query) //Query
+
+	if errorQuery != nil {
+		fmt.Println("Query failed: " + errorQuery.Error())
+	}
+
+	for results.Next() {
+		var result model.Employee
+
+		errScan := results.Scan(
+			&result.EMPLOYEE_CODE,
+			&result.ID_FACTORY,
+			&result.GROUP_ID,
+			&result.PREFIX,
+			&result.FNAME_TH,
+			&result.LNAME_TH,
+			&result.FNAME_EN,
+			&result.LNAME_EN,
+			&result.ID_ROLE,
+			&result.TYPE_ID,
+			&result.ID_UGROUP,
+			&result.FACTORY_NAME,
+			&result.NAME_ROLE,
+			&result.NAME_GROUP,
+			&result.NAME_UGROUP,
+			&result.NAME_UTYPE,
+			&result.CREATED_AT,
+			&result.CREATED_BY,
+			&result.UPDATED_AT,
+			&result.UPDATED_BY,
+		) // Scan เก็บข้อมูลใน Struct
+
+		if errScan != nil {
+			fmt.Println("Row scan failed: " + errScan.Error())
+
+		} else {
+			info = append(info, result)
+		}
+	}
+
+	defer results.Close()
+
+	if len(info) > 0 {
+		return c.JSON(fiber.Map{
+			"err":     false,
+			"status":  "Ok",
+			"results": info,
+		})
+	} else {
+		return c.JSON(fiber.Map{
+			"err":     true,
+			"msg":     "Not Found",
+			"results": info,
+		})
+	}
+}
+
+func InsertEmployee(c *fiber.Ctx) error {
+	var req model.BodyEmployee
+	var CheckUser []model.EmployeeCode
+	var employeeId string
+
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"err": true,
+			"msg": "Invalid request body",
+		})
+	}
+
+	if req.EmployeeCode == "" || req.Prefix == "" || req.FnameTH == "" || req.LnameTH == "" || req.FnameEN == "" || req.LnameEN == "" || req.ActionBy == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"err": true,
+			"msg": "Data is required!",
+		})
+	}
+
+	connString := config.LoadDatabaseConfig()
+
+	db, err := sql.Open("sqlserver", connString)
+
+	if err != nil {
+		fmt.Println("Error creating connection: " + err.Error())
+	}
+	defer db.Close()
+
+	// Test connection
+	err = db.Ping()
+	if err != nil {
+		fmt.Println("Error connecting to the database: " + err.Error())
+	}
+
+	user, errUser := db.Query(`SELECT UHR_EmpCode FROM [dbo].[V_AllUserPSTH] WHERE UHR_EmpCode = @code`, sql.Named("code", req.EmployeeCode))
+
+	for user.Next() {
+		errScanUser := user.Scan(&employeeId)
+		if errScanUser != nil {
+			return c.JSON(fiber.Map{
+				"err": true,
+				"msg": errScanUser.Error(),
+			})
+		}
+	}
+
+	defer user.Close()
+
+	if errUser != nil {
+		fmt.Println("Error executing query: " + err.Error())
+		return c.JSON(fiber.Map{
+			"err": true,
+			"msg": err.Error(),
+		})
+	}
+
+	if employeeId != "" {
+
+		// คำสั่ง SQL
+		stmt := `SELECT EMPLOYEE_CODE FROM [dbo].[TBL_EMPLOYEE] WHERE [EMPLOYEE_CODE] = @code`
+		// Execute SQL statement
+		rows, err := db.Query(stmt,
+			sql.Named("code", req.EmployeeCode),
+		)
+
+		if err != nil {
+			fmt.Println("Error executing query: " + err.Error())
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"err": true,
+				"msg": err.Error(),
+			})
+		}
+
+		for rows.Next() {
+			var emp model.EmployeeCode
+			errScan := rows.Scan(&emp.EMPLOYEE_CODE)
+			if errScan != nil {
+				fmt.Println("Error Scan", errScan.Error())
+			} else {
+				CheckUser = append(CheckUser, emp)
+			}
+		}
+
+		if len(CheckUser) > 0 {
+			return c.JSON(fiber.Map{
+				"err": true,
+				"msg": "User is duplicated!",
+			})
+		}
+
+		_, errorInsert := db.Exec(`INSERT INTO [dbo].[TBL_EMPLOYEE] ([EMPLOYEE_CODE],[ID_FACTORY],[GROUP_ID],[PREFIX],[FNAME_TH]
+           ,[LNAME_TH],[FNAME_EN],[LNAME_EN],[ID_ROLE],[TYPE_ID],[ID_UGROUP],[CREATED_AT],[CREATED_BY]) 
+		   VALUES (@code,@factory,@group,@prefix,@fnameTH,@lnameTH,@fnameEN,@lnameEN
+		   ,@role,@type,@ugroup,GETDATE(),@action)`,
+			sql.Named("code", req.EmployeeCode),
+			sql.Named("factory", req.Factory),
+			sql.Named("group", req.Group),
+			sql.Named("prefix", req.Prefix),
+			sql.Named("fnameTH", req.FnameTH),
+			sql.Named("lnameTH", req.LnameTH),
+			sql.Named("fnameEN", req.FnameEN),
+			sql.Named("lnameEN", req.LnameEN),
+			sql.Named("role", req.Role),
+			sql.Named("type", req.Type),
+			sql.Named("ugroup", req.Ugroup),
+			sql.Named("action", req.ActionBy))
+
+		if errorInsert != nil {
+			return c.JSON(fiber.Map{
+				"err": true,
+				"msg": errorInsert.Error(),
+			})
+
+		}
+
+		// Response
+		return c.JSON(fiber.Map{
+			"err":    false,
+			"msg":    "Employee inserted successfully!",
+			"status": "Ok",
+		})
+	} else {
+		return c.JSON(fiber.Map{
+			"err": true,
+			"msg": "Employee isn't found!",
+		})
+	}
+
+}
+
+func UpdateEmployee(c *fiber.Ctx) error {
+	var req model.BodyUpdateEmployee
+	code := c.Params("code")
+
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"err": true,
+			"msg": "Invalid request body",
+		})
+	}
+
+	if req.ActionBy == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"err": true,
+			"msg": "Data is required!",
+		})
+	}
+
+	connString := config.LoadDatabaseConfig()
+
+	db, err := sql.Open("sqlserver", connString)
+
+	if err != nil {
+		fmt.Println("Error creating connection: " + err.Error())
+	}
+	defer db.Close()
+
+	// Test connection
+	err = db.Ping()
+	if err != nil {
+		fmt.Println("Error connecting to the database: " + err.Error())
+	}
+
+	_, errorInsert := db.Exec(`UPDATE [dbo].[TBL_EMPLOYEE] SET [ID_FACTORY] = @factory,[GROUP_ID] = @group,
+		[TYPE_ID] = @type,[ID_UGROUP] = @ugroup,[UPDATED_AT] = GETDATE(),[UPDATED_BY] = @action,[ID_ROLE] = @role WHERE [EMPLOYEE_CODE] = @code`,
+		sql.Named("code", code),
+		sql.Named("factory", req.Factory),
+		sql.Named("group", req.Group),
+		sql.Named("role", req.Role),
+		sql.Named("type", req.Type),
+		sql.Named("ugroup", req.Ugroup),
+		sql.Named("action", req.ActionBy))
+
+	if errorInsert != nil {
+		return c.JSON(fiber.Map{
+			"err": true,
+			"msg": errorInsert.Error(),
+		})
+
+	}
+
+	// Response
+	return c.JSON(fiber.Map{
+		"err":    false,
+		"msg":    "Employee updated successfully!",
+		"status": "Ok",
+	})
+
+}
+
+func DeleteEmployee(c *fiber.Ctx) error {
+
+	code := c.Params("code")
+
+	connString := config.LoadDatabaseConfig()
+
+	db, err := sql.Open("sqlserver", connString)
+
+	if err != nil {
+		fmt.Println("Error creating connection: " + err.Error())
+	}
+	defer db.Close()
+
+	// Test connection
+	err = db.Ping()
+	if err != nil {
+		fmt.Println("Error connecting to the database: " + err.Error())
+	}
+
+	_, errorDelete := db.Exec(`DELETE FROM [dbo].[TBL_EMPLOYEE] WHERE [EMPLOYEE_CODE] = @code`,
+		sql.Named("code", code))
+
+	if errorDelete != nil {
+		return c.JSON(fiber.Map{
+			"err": true,
+			"msg": errorDelete.Error(),
+		})
+
+	}
+
+	// Response
+	return c.JSON(fiber.Map{
+		"err":    false,
+		"msg":    "Employee deleted successfully!",
+		"status": "Ok",
+	})
+
+}
+
+func GetEmployeeByCode(c *fiber.Ctx) error {
+
+	code := c.Params("code")
+	var detailUser []model.ResultEmployeeByCode
+
+	connString := config.LoadDatabaseConfig()
+
+	db, err := sql.Open("sqlserver", connString)
+
+	if err != nil {
+		fmt.Println("Error creating connection: " + err.Error())
+	}
+	defer db.Close()
+
+	// Test connection
+	err = db.Ping()
+	if err != nil {
+		fmt.Println("Error connecting to the database: " + err.Error())
+	}
+
+	userResult, errUser := db.Query(`SELECT UHR_Prefix_th as Prefix,UHR_EmpCode as EmployeeCode,UHR_FirstName_th as FnameTH,UHR_LastName_th as LnameTH,UHR_FirstName_en as FnameEN,UHR_LastName_en as LnameEN
+  FROM [dbo].[V_AllUserPSTH] WHERE UHR_EmpCode = @code`, sql.Named("code", code))
+
+	if errUser != nil {
+		return c.JSON(fiber.Map{
+			"err": true,
+			"msg": errUser.Error(),
+		})
+	}
+
+	for userResult.Next() {
+		var user model.ResultEmployeeByCode
+
+		errScan := userResult.Scan(&user.Prefix, &user.EmployeeCode, &user.FnameTH, &user.LnameTH, &user.FnameEN, &user.LnameEN)
+		if errScan != nil {
+			fmt.Println(errScan.Error())
+
+		} else {
+			detailUser = append(detailUser, user)
+		}
+	}
+
+	if len(detailUser) > 0 {
+		return c.JSON(fiber.Map{
+			"err":     false,
+			"results": detailUser,
+			"status":  "Ok",
+		})
+	} else {
+		return c.JSON(fiber.Map{
+			"err": true,
+			"msg": "Employee isn't found!",
+		})
+	}
+
 }

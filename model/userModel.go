@@ -152,3 +152,9 @@ type ResultEmployeeByCode struct {
 	FnameEN      string
 	LnameEN      string
 }
+
+type UserBodyMail struct {
+	EMPLOYEE_CODE string
+	FULLNAME      string
+	DEPARTMENT    interface{}
+}

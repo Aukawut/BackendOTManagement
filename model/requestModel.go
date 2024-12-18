@@ -116,3 +116,14 @@ type RequestCommentApprover struct {
 	POSITION      interface{}
 	FULLNAME      interface{}
 }
+
+type BodyApproveRequest struct {
+	Status   int    `json:"status"`
+	ActionBy string `json:"actionBy"`
+	Remark   string `json:"remark"`
+}
+
+type ResponseApproverStepByReq struct {
+	APPROVER string
+	STEP     int
+}

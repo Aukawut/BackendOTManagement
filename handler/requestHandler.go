@@ -250,6 +250,8 @@ func RequestOvertime(c *fiber.Ctx) error {
 			}
 		}
 
+		CheckSendEmail(1, running)
+
 		return c.JSON(fiber.Map{
 			"err":    false,
 			"msg":    "Requested successfully!",
@@ -946,6 +948,213 @@ func GetApproverPending(c *fiber.Ctx) error {
 			"msg":     "Not Found",
 			"results": info,
 		})
+	}
+}
+func ApproveRequestByNo(c *fiber.Ctx) error {
+
+	var req model.BodyApproveRequest
+	var currentStepApprover []model.ResponseApproverStepByReq
+
+	requestNo := c.Params("requestNo")
+
+	rev := c.Params("rev")
+	iRev, _ := strconv.Atoi(rev)
+
+	var completeStep int
+	var approved int
+	var jobStatus int
+
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Invalid request body",
+		})
+	}
+	connString := config.LoadDatabaseConfig()
+
+	db, err := sql.Open("sqlserver", connString)
+
+	if err != nil {
+		fmt.Println("Error creating connection: " + err.Error())
+	}
+	defer db.Close()
+
+	// Test connection
+	err = db.Ping()
+	if err != nil {
+		fmt.Println("Error connecting to the database: " + err.Error())
+	}
+
+	if req.Status == 1 {
+		jobStatus = 1
+	} else if req.Status == 2 {
+		jobStatus = 5
+	} else if req.Status == 3 {
+		jobStatus = 2
+	} else if req.Status == 4 {
+		jobStatus = 3
+	} else {
+		return c.JSON(fiber.Map{"err": true, "msg": "[Status] Approval Process don't have."})
+	}
+
+	// Check Step User
+	selectApprover, errorSelect := db.Query(`SELECT a.CODE_APPROVER as APPROVER,a.STEP FROM TBL_REQUESTS_HISTORY h LEFT JOIN 
+TBL_APPROVERS a ON a.ID_GROUP_DEPT = h.ID_GROUP_DEPT AND a.ID_FACTORY = h.ID_FACTORY
+WHERE a.CODE_APPROVER = @code AND h.REQUEST_NO = @requestNo AND REV = @rev`,
+		sql.Named("code", req.ActionBy),
+		sql.Named("requestNo", requestNo),
+		sql.Named("rev", rev))
+
+	if errorSelect != nil {
+		fmt.Println("Query failed: " + errorSelect.Error())
+	}
+
+	for selectApprover.Next() {
+		var stepCurrent model.ResponseApproverStepByReq
+		errScan := selectApprover.Scan(&stepCurrent.APPROVER, &stepCurrent.STEP)
+		if errScan != nil {
+			fmt.Println("Error scanning approver step:", errScan.Error())
+		} else {
+			currentStepApprover = append(currentStepApprover, stepCurrent)
+		}
+	}
+
+	if len(currentStepApprover) > 0 {
+
+		// Update Status Approve
+
+		_, errUpdate := db.Exec(`UPDATE [dbo].[TBL_APPROVAL] SET 
+		[CODE_APPROVER] = @code,[ID_STATUS_APV] = @status,[REMARK] = @remark,[UPDATED_AT] = GETDATE() 
+		WHERE [REQUEST_NO] = @requestNo AND [REV] = @rev AND [STEP] = @step`,
+			sql.Named("code", req.ActionBy),
+			sql.Named("status", req.Status),
+			sql.Named("remark", req.Remark),
+			sql.Named("requestNo", requestNo),
+			sql.Named("rev", rev),
+			sql.Named("step", currentStepApprover[0].STEP),
+		)
+
+		if errUpdate != nil {
+			fmt.Println("Query failed: " + errorSelect.Error())
+		}
+
+		query := `SELECT t.STEP FROM TBL_REQUESTS_HISTORY h LEFT JOIN TBL_OT_TYPE t ON h.ID_TYPE_OT = t.ID_TYPE_OT WHERE REQUEST_NO = @requestNo AND REV = @rev 
+	AND REQ_STATUS = 1`
+
+		stepComplete, errorStep := db.Query(query, sql.Named("requestNo", requestNo), sql.Named("rev", rev))
+
+		if errorStep != nil {
+			fmt.Println("Query failed: " + errorStep.Error())
+		}
+
+		for stepComplete.Next() {
+			var step int
+			errScan := stepComplete.Scan(&step)
+			if errScan != nil {
+				fmt.Println(errScan.Error())
+			} else {
+				completeStep = step
+			}
+
+		}
+
+		queryApproved, errQueryApproved := db.Query(`SELECT COUNT(*) as [COUNT] FROM TBL_APPROVAL al WHERE al.REQUEST_NO = @requestNo
+    AND REV = @rev AND ID_STATUS_APV = 3`, sql.Named("requestNo", requestNo), sql.Named("rev", rev))
+
+		if errQueryApproved != nil {
+			fmt.Println("Query failed: " + errQueryApproved.Error())
+		}
+		for queryApproved.Next() {
+			var step int
+			errScan := queryApproved.Scan(&step)
+			if errScan != nil {
+				fmt.Println(errScan.Error())
+			} else {
+				approved = step
+			}
+
+		}
+		// 3 is Done (Status Process Approve)
+		if req.Status != 3 {
+			fmt.Println("Update Status Request and Send Mail to Requestor")
+
+			// Update History Table
+			_, errUpdate := db.Exec(`UPDATE TBL_REQUESTS_HISTORY SET REMARK = @remark ,REQ_STATUS = @status,
+			UPDATED_AT = GETDATE(),UPDATED_BY = @code WHERE REQUEST_NO = @requestNo AND REV = @rev`,
+				sql.Named("code", req.ActionBy),
+				sql.Named("status", jobStatus),
+				sql.Named("remark", req.Remark),
+				sql.Named("requestNo", requestNo),
+				sql.Named("rev", rev),
+			)
+
+			if errUpdate != nil {
+				fmt.Println("Query failed: " + errUpdate.Error())
+			}
+
+			// Update Main Request Table
+			_, errUpdateMainReq := db.Exec(`UPDATE TBL_REQUESTS SET REMARK = @remark ,REQ_STATUS = @status,
+			UPDATED_AT = GETDATE(),UPDATED_BY = @code WHERE REQUEST_NO = @requestNo`,
+				sql.Named("code", req.ActionBy),
+				sql.Named("status", jobStatus),
+				sql.Named("remark", req.Remark),
+				sql.Named("requestNo", requestNo),
+			)
+
+			if errUpdateMainReq != nil {
+				fmt.Println("Query failed: " + errUpdateMainReq.Error())
+			}
+		}
+		fmt.Println("completeStep", completeStep)
+		fmt.Println("approved", approved)
+
+		// 3 is Done and  All Approved
+		if (completeStep == approved) && req.Status == 3 {
+
+			// Update Status and Send Mail to Requestor
+			fmt.Println("Update Status Request and Send Mail to Requestor")
+
+			// Update History Table
+			_, errUpdate := db.Exec(`UPDATE TBL_REQUESTS_HISTORY SET REMARK = @remark ,REQ_STATUS = @status,
+			UPDATED_AT = GETDATE(),UPDATED_BY = @code WHERE REQUEST_NO = @requestNo AND REV = @rev`,
+				sql.Named("code", req.ActionBy),
+				sql.Named("status", jobStatus),
+				sql.Named("remark", req.Remark),
+				sql.Named("requestNo", requestNo),
+				sql.Named("rev", rev),
+			)
+
+			if errUpdate != nil {
+				fmt.Println("Query failed: " + errUpdate.Error())
+			}
+
+			// Update Main Request Table
+			_, errUpdateMainReq := db.Exec(`UPDATE TBL_REQUESTS SET REMARK = @remark ,REQ_STATUS = @status,
+			UPDATED_AT = GETDATE(),UPDATED_BY = @code WHERE REQUEST_NO = @requestNo`,
+				sql.Named("code", req.ActionBy),
+				sql.Named("status", jobStatus),
+				sql.Named("remark", req.Remark),
+				sql.Named("requestNo", requestNo),
+			)
+
+			if errUpdateMainReq != nil {
+				fmt.Println("Query failed: " + errUpdateMainReq.Error())
+			}
+
+			//SendMail to Requestor
+
+		}
+
+		// 3 is Done (Status Process Approve)
+		if (completeStep > approved) && req.Status == 3 {
+			fmt.Println("Update Approval Status and Send mail to Next")
+
+			CheckSendEmail(iRev, requestNo)
+
+		}
+
+		return c.JSON(fiber.Map{"err": false, "msg": "Updated successfully!", "status": "Ok"})
+	} else {
+		return c.JSON(fiber.Map{"err": true, "msg": "Permission is denined!"})
 	}
 }
 

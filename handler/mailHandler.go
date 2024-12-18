@@ -1,27 +1,190 @@
 package handler
 
 import (
+	"database/sql"
 	"fmt"
 	"os"
 
+	"gitgub.com/Aukawut/ServerOTManagement/config"
+	"gitgub.com/Aukawut/ServerOTManagement/model"
 	"github.com/gofiber/fiber/v2"
 	"github.com/joho/godotenv"
 	"gopkg.in/gomail.v2"
 )
 
 func SendMailToApprover(c *fiber.Ctx) error {
+	// Load database configuration
+	strConfig := config.LoadDatabaseConfig()
+	requestNo := c.Params("requestNo")
+	rev := c.Params("rev")
 
+	var users []model.UserBodyMail
+
+	var TitleDescReq []model.RequestDetailBody
+
+	// Load environment variables
 	err := godotenv.Load()
 	if err != nil {
 		fmt.Println("Error loading .env file")
-
 	}
+
+	// Connect to SQL Server
+	db, err := sql.Open("sqlserver", strConfig)
+	if err != nil {
+		return c.JSON(fiber.Map{
+			"err": true,
+			"msg": "Error creating database connection: " + err.Error(),
+		})
+	}
+	defer db.Close()
+
+	// Test database connection
+	err = db.Ping()
+	if err != nil {
+		return c.JSON(fiber.Map{
+			"err": true,
+			"msg": "Error connecting to the database: " + err.Error(),
+		})
+	}
+
+	// SQL query
+	stmt := `
+		SELECT rh.REQUEST_NO, f.FACTORY_NAME, rh.REV, 
+		FORMAT(CAST(rh.START_DATE AS DATETIME2), 'yyyy-MM-dd HH:mm') AS [START],
+		FORMAT(CAST(rh.END_DATE AS DATETIME2), 'yyyy-MM-dd HH:mm') AS [END],
+		CAST(DATEDIFF(MINUTE, rh.START_DATE, rh.END_DATE) / 60.00 AS DECIMAL(18, 2)) AS MINUTE_DIFF,
+		s.NAME_STATUS
+		FROM TBL_REQUESTS_HISTORY rh
+		LEFT JOIN TBL_REQ_STATUS s ON rh.REQ_STATUS = s.ID_STATUS
+		LEFT JOIN TBL_FACTORY f ON rh.ID_FACTORY = f.ID_FACTORY
+		WHERE rh.REQUEST_NO = @requestNo AND rh.REV = @rev`
+
+	stmtUser := `
+		SSELECT u.EMPLOYEE_CODE,hr.UHR_FullName_th as FULLNAME,hr.UHR_Department as DEPARTMENT FROM TBL_USERS_REQ u
+LEFT JOIN (SELECT * FROM V_AllUserPSTH ) hr ON 
+u.EMPLOYEE_CODE COLLATE Thai_CI_AS = hr.UHR_EmpCode COLLATE Thai_CI_AS
+WHERE REQUEST_NO = @requestNo AND REV = @rev`
+
+	// Execute the query
+	headerRows, err := db.Query(stmt, sql.Named("requestNo", requestNo), sql.Named("rev", rev))
+	if err != nil {
+		return c.JSON(fiber.Map{
+			"err": true,
+			"msg": "Query failed: " + err.Error(),
+		})
+	}
+	defer headerRows.Close()
+
+	// Parse query results
+	for headerRows.Next() {
+		var header model.RequestDetailBody
+		err := headerRows.Scan(&header.REQUEST_NO, &header.FACTORY_NAME, &header.REV, &header.START, &header.END, &header.MINUTE_DIFF, &header.NAME_STATUS)
+		if err != nil {
+			return c.JSON(fiber.Map{
+				"err": true,
+				"msg": "Row scan failed: " + err.Error(),
+			})
+		}
+		TitleDescReq = append(TitleDescReq, header)
+	}
+
+	// Build HTML table
+	table := `<table
+      style="width: 300px; border: 1px solid black; border-collapse: collapse">
+		
+		<tbody>`
+
+	if len(TitleDescReq) > 0 {
+		for _, v := range TitleDescReq {
+			table += fmt.Sprintf(`
+		<tr >
+        <td style="font-weight: bold;background: #00A6B9;color: #011d21;width: 120px;">Request No.</td>
+        <td>%v</td>
+      </tr>
+      <tr>
+        <td style="font-weight: bold;background: #00A6B9;color: #011d21;width: 120px;">Factory</td>
+        <td>%v</td>
+      </tr>
+      <tr>
+        <td style="font-weight: bold;background: #00A6B9;color: #011d21;width: 120px;">Revise</td>
+        <td>%v</td>
+      </tr>
+      <tr>
+        <td style="font-weight: bold;background: #00A6B9;color: #011d21;width: 120px;">Start</td>
+        <td>%v</td>
+      </tr>
+      <tr>
+        <td style="font-weight: bold;background: #00A6B9;color: #011d21;width: 120px;">End</td>
+        <td>%v</td>
+      </tr>
+      <tr>
+        <td style="font-weight: bold;background: #00A6B9;color: #011d21;width: 120px;">ชั่วโมง / คน</td>
+        <td>%v</td>
+      </tr>
+      <tr>
+        <td style="font-weight: bold;background: #00A6B9;color: #011d21;width: 120px;">สถานะ</td>
+        <td>%v</td>
+      </tr>
+			
+			`,
+				v.REQUEST_NO, v.FACTORY_NAME, v.REV, v.START, v.END, v.MINUTE_DIFF, v.NAME_STATUS)
+		}
+	}
+
+	table += `
+		</tbody>
+	</table>`
+
+	// Execute the query
+	rowUsers, errUser := db.Query(stmtUser, sql.Named("requestNo", requestNo), sql.Named("rev", rev))
+	if errUser != nil {
+		return c.JSON(fiber.Map{
+			"err": true,
+			"msg": "Query failed: " + errUser.Error(),
+		})
+	}
+	defer rowUsers.Close()
+
+	tableUsers := `  <table style="width: 500px; border: 1px solid black; border-collapse: collapse">
+		
+		<tbody>`
+
+	// Parse query results
+	for rowUsers.Next() {
+		var user model.UserBodyMail
+		err := headerRows.Scan(&user.EMPLOYEE_CODE, &user.FULLNAME, &user.DEPARTMENT)
+		if err != nil {
+			return c.JSON(fiber.Map{
+				"err": true,
+				"msg": "Row scan failed: " + err.Error(),
+			})
+		}
+		users = append(users, user)
+	}
+
+	if len(users) > 0 {
+		for index, u := range users {
+			tableUsers += fmt.Sprintf(`
+			  <tr>
+				<td>%v</td>
+				<td>%v</td>
+				<td>%v</td>
+				<td>%v</td>
+        	  </tr>
+			`, index+1, u.EMPLOYEE_CODE, u.FULLNAME, u.DEPARTMENT)
+
+		}
+	}
+	tableUsers += `
+		</tbody>
+	</table>`
+
 	emailSender := fmt.Sprintf("Request OT <%s>", os.Getenv("MAIL_ADDRESS"))
 
 	to := "akawut.kamesuwan@prospira.com"
 
 	subject := "Test Email with HTML and Cordia New Font"
-	body := `
+	body := fmt.Sprintf(`
 		<!DOCTYPE html>
 		<html lang="en">
 		<head>
@@ -36,13 +199,39 @@ func SendMailToApprover(c *fiber.Ctx) error {
 					color: #333;
 					font-size: 18px;
 				}
+					  p {
+				font-size: 18px;
+				line-height: 5px;
+      					}
+					th,
+					td {
+						border: 1px solid black;
+						border-collapse: collapse;
+						padding: 3px;
+						text-align: center;
+					}
+		
 			</style>
 		</head>
 		<body>
-			<p class="custom-style">This is a test email using the Cordia New font!</p>
+		<div>
+      <p>
+        เรียน คุณอรรควุฒิ เข็มสุวรรณ
+      </p>
+      <p>
+        กรุณาตรวจสอบคำขอหมายเลข : %s
+      </p>
+    </div>
+    <h4 style="margin-bottom: 10px">รายละเอียดคำขอ</h4>
+		<div>
+				%s
+		</div>
+		<div>
+		%s
+		</div>
 		</body>
 		</html>
-	`
+	`, TitleDescReq[0].REQUEST_NO, table, tableUsers)
 
 	// SMTP server configuration
 	smtpHost := "10.145.0.250"
@@ -58,33 +247,6 @@ func SendMailToApprover(c *fiber.Ctx) error {
 
 	// Create a new SMTP dialer
 	dialer := gomail.NewDialer(smtpHost, smtpPort, emailSender, password)
-
-	stmt := `SELECT DISTINCT REQUEST_NO,g.NAME_GROUP,f.FACTORY_NAME,s.NAME_STATUS,h.REV,wc.NAME_WORKCELL,wg.NAME_WORKGRP,h.REMARK,
-hr.UHR_FullName_th as REQUESTOR,CONVERT(date,h.START_DATE) as DATE_OT,ISNULL(pwc.SUM_HOURS,0) as PLAN_WORKCELL,
-CONVERT(TIME,h.START_DATE) as TIME_START,CONVERT(TIME,h.END_DATE) as TIME_END,
-CAST(DATEDIFF(MINUTE,h.START_DATE,h.END_DATE) / 60 as decimal(18,2)) as HOURS_TOTAL,
-ISNULL(pfc.SUM_HOURS_FAC,0) as PLAN_FACTORY
-FROM TBL_REQUESTS_HISTORY h
-LEFT JOIN TBL_GROUP_DEPT g ON h.ID_GROUP_DEPT = g.ID_GROUP_DEPT
-LEFT JOIN TBL_FACTORY f ON h.ID_FACTORY = f.ID_FACTORY
-LEFT JOIN TBL_REQ_STATUS s ON h.REQ_STATUS = s.ID_STATUS
-LEFT JOIN TBL_WORKCELL wc ON h.ID_WORK_CELL = wc.ID_WORK_CELL
-LEFT JOIN TBL_WORK_GROUP wg ON wc.ID_WORKGRP = wg.ID_WORKGRP
-LEFT JOIN V_AllUserPSTH hr ON h.CREATED_BY COLLATE Thai_CI_AS = hr.UHR_EmpCode COLLATE Thai_CI_AS
-LEFT JOIN (
-SELECT p.ID_WORK_CELL,w.NAME_WORKCELL ,p.[YEAR],p.MONTH,SUM(HOURS) as SUM_HOURS
-FROM TBL_PLAN_OVERTIME p LEFT JOIN TBL_WORKCELL w ON p.ID_WORK_CELL = w.ID_WORK_CELL
-LEFT JOIN TBL_FACTORY f ON w.ID_FACTORY = f.ID_FACTORY GROUP BY 
-p.ID_WORK_CELL,w.NAME_WORKCELL,p.YEAR,p.MONTH
-) pwc ON h.ID_WORK_CELL = pwc.ID_WORK_CELL AND YEAR(h.START_DATE) = pwc.YEAR AND MONTH(h.START_DATE) = pwc.MONTH
-
-LEFT JOIN (
-SELECT f.ID_FACTORY,f.FACTORY_NAME,p.YEAR,p.MONTH,SUM(HOURS) as SUM_HOURS_FAC
-FROM TBL_PLAN_OVERTIME p LEFT JOIN TBL_WORKCELL w ON p.ID_WORK_CELL = w.ID_WORK_CELL
-LEFT JOIN TBL_FACTORY f ON w.ID_FACTORY = f.ID_FACTORY GROUP BY 
-f.ID_FACTORY,f.FACTORY_NAME,p.YEAR,p.MONTH
-) pfc ON h.ID_FACTORY = pfc.ID_FACTORY AND YEAR(h.START_DATE) = pfc.YEAR AND MONTH(h.START_DATE) = pfc.MONTH
-WHERE REQUEST_NO = 'RQ202412100001' AND REV = 1`
 
 	// Send the email
 	if err := dialer.DialAndSend(message); err != nil {

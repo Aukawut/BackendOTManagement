@@ -29,7 +29,8 @@ func main() {
 	app.Post("/request", handler.RequestOvertime)
 	app.Get("/count/request/:code", jwt.DecodeToken, handler.CountRequestByEmpCode)
 	app.Get("/count/requests/:year", jwt.DecodeToken, handler.CountRequestByYear)
-	app.Put("/request/:requestNo", jwt.DecodeToken, handler.CancelRequestByReqNo)
+	app.Put("/request/update/:requestNo/:rev", jwt.DecodeToken, handler.ApproveRequestByNo)
+	app.Put("/request/cancel/:requestNo", jwt.DecodeToken, handler.CancelRequestByReqNo)
 	app.Post("/rewrite/request", jwt.DecodeToken, handler.RewiteRequestOvertime)
 	app.Get("/menu/year", jwt.DecodeToken, handler.GetYearMenu)
 	app.Get("/menu/month/:year", jwt.DecodeToken, handler.GetMonthMenu)
@@ -114,7 +115,8 @@ func main() {
 	app.Delete("/employee/:code", jwt.DecodeTokenAdmin, handler.DeleteEmployee)
 	app.Get("/employee/:code", jwt.DecodeToken, handler.GetEmployeeByCode)
 
-	app.Get("/mail", handler.SendMailToApprover)
+	app.Get("/mail/:requestNo/:rev", handler.SendMailToApprover)
+	app.Get("/test/:requestNo/:rev", handler.TestApp)
 
 	PORT := os.Getenv("PORT")
 

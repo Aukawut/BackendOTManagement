@@ -104,6 +104,7 @@ func main() {
 	app.Get("/actual/summary/factory/plan/:start/:end/:ugroup", jwt.DecodeToken, handler.SummaryActualByDurationAndFac)
 	app.Get("/actual/count/:start/:end/:ugroup", jwt.DecodeToken, handler.GetCountActualOvertime)
 	app.Get("/actual/summary/date/:start/:end/:ugroup", jwt.DecodeToken, handler.SummaryActualByDate)
+	app.Get("/actual/ot/:start/:end/:ugroup/:fac", jwt.DecodeToken, handler.SummaryActualOvertime)
 
 	app.Post("/permission/user", jwt.DecodeTokenAdmin, handler.InsertUserPermission)
 	app.Put("/permission/user/:id", jwt.DecodeTokenAdmin, handler.UpdateUserPermission)
@@ -115,7 +116,6 @@ func main() {
 	app.Delete("/employee/:code", jwt.DecodeTokenAdmin, handler.DeleteEmployee)
 	app.Get("/employee/:code", jwt.DecodeToken, handler.GetEmployeeByCode)
 
-	app.Get("/mail/:requestNo/:rev", handler.SendMailToApprover)
 	app.Get("/test/:requestNo/:rev", handler.TestApp)
 
 	PORT := os.Getenv("PORT")

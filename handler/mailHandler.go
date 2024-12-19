@@ -7,16 +7,19 @@ import (
 
 	"gitgub.com/Aukawut/ServerOTManagement/config"
 	"gitgub.com/Aukawut/ServerOTManagement/model"
-	"github.com/gofiber/fiber/v2"
+
 	"github.com/joho/godotenv"
 	"gopkg.in/gomail.v2"
 )
 
-func SendMailToApprover(c *fiber.Ctx) error {
+func SendEMailToApprover(requestNo string, rev int, mail string) bool {
+	if mail == "" {
+		return false
+	}
+
+	fmt.Println(mail)
 	// Load database configuration
 	strConfig := config.LoadDatabaseConfig()
-	requestNo := c.Params("requestNo")
-	rev := c.Params("rev")
 
 	var users []model.UserBodyMail
 
@@ -31,20 +34,16 @@ func SendMailToApprover(c *fiber.Ctx) error {
 	// Connect to SQL Server
 	db, err := sql.Open("sqlserver", strConfig)
 	if err != nil {
-		return c.JSON(fiber.Map{
-			"err": true,
-			"msg": "Error creating database connection: " + err.Error(),
-		})
+		fmt.Println("Error creating database connection: " + err.Error())
+		return false
 	}
 	defer db.Close()
 
 	// Test database connection
 	err = db.Ping()
 	if err != nil {
-		return c.JSON(fiber.Map{
-			"err": true,
-			"msg": "Error connecting to the database: " + err.Error(),
-		})
+		fmt.Println("Error creating database connection: " + err.Error())
+		return false
 	}
 
 	// SQL query
@@ -60,7 +59,7 @@ func SendMailToApprover(c *fiber.Ctx) error {
 		WHERE rh.REQUEST_NO = @requestNo AND rh.REV = @rev`
 
 	stmtUser := `
-		SSELECT u.EMPLOYEE_CODE,hr.UHR_FullName_th as FULLNAME,hr.UHR_Department as DEPARTMENT FROM TBL_USERS_REQ u
+		SELECT u.EMPLOYEE_CODE,hr.UHR_FullName_th as FULLNAME,hr.UHR_Department as DEPARTMENT FROM TBL_USERS_REQ u
 LEFT JOIN (SELECT * FROM V_AllUserPSTH ) hr ON 
 u.EMPLOYEE_CODE COLLATE Thai_CI_AS = hr.UHR_EmpCode COLLATE Thai_CI_AS
 WHERE REQUEST_NO = @requestNo AND REV = @rev`
@@ -68,10 +67,9 @@ WHERE REQUEST_NO = @requestNo AND REV = @rev`
 	// Execute the query
 	headerRows, err := db.Query(stmt, sql.Named("requestNo", requestNo), sql.Named("rev", rev))
 	if err != nil {
-		return c.JSON(fiber.Map{
-			"err": true,
-			"msg": "Query failed: " + err.Error(),
-		})
+		fmt.Println("Query failed: " + err.Error())
+
+		return false
 	}
 	defer headerRows.Close()
 
@@ -80,12 +78,13 @@ WHERE REQUEST_NO = @requestNo AND REV = @rev`
 		var header model.RequestDetailBody
 		err := headerRows.Scan(&header.REQUEST_NO, &header.FACTORY_NAME, &header.REV, &header.START, &header.END, &header.MINUTE_DIFF, &header.NAME_STATUS)
 		if err != nil {
-			return c.JSON(fiber.Map{
-				"err": true,
-				"msg": "Row scan failed: " + err.Error(),
-			})
+			fmt.Println("Row scan failed: " + err.Error())
+
+		} else {
+			TitleDescReq = append(TitleDescReq, header)
+
 		}
-		TitleDescReq = append(TitleDescReq, header)
+
 	}
 
 	// Build HTML table
@@ -138,26 +137,32 @@ WHERE REQUEST_NO = @requestNo AND REV = @rev`
 	// Execute the query
 	rowUsers, errUser := db.Query(stmtUser, sql.Named("requestNo", requestNo), sql.Named("rev", rev))
 	if errUser != nil {
-		return c.JSON(fiber.Map{
-			"err": true,
-			"msg": "Query failed: " + errUser.Error(),
-		})
+		println("Query failed: " + errUser.Error())
+		return false
 	}
 	defer rowUsers.Close()
 
 	tableUsers := `  <table style="width: 500px; border: 1px solid black; border-collapse: collapse">
-		
+			<thead> 
+        <tr style="background: #00A6B9;">
+        
+            <th style="font-weight: bold;">No.</th>
+            <th style="font-weight: bold;">รหัสพนักงาน</th>
+            <th style="font-weight: bold;">ชื่อ - สกุล</th>
+            <th style="font-weight: bold;">หน่วยงาน</th>
+        
+
+        </tr>
+      </thead>
 		<tbody>`
 
 	// Parse query results
 	for rowUsers.Next() {
 		var user model.UserBodyMail
-		err := headerRows.Scan(&user.EMPLOYEE_CODE, &user.FULLNAME, &user.DEPARTMENT)
+		err := rowUsers.Scan(&user.EMPLOYEE_CODE, &user.FULLNAME, &user.DEPARTMENT)
 		if err != nil {
-			return c.JSON(fiber.Map{
-				"err": true,
-				"msg": "Row scan failed: " + err.Error(),
-			})
+			fmt.Println("Row scan failed: " + err.Error())
+			return false
 		}
 		users = append(users, user)
 	}
@@ -227,14 +232,20 @@ WHERE REQUEST_NO = @requestNo AND REV = @rev`
 				%s
 		</div>
 		<div>
+	  <p>
+       รายชื่อพนักงานที่เข้างาน ช่วง OT :  
+      </p>
 		%s
+
+		<div><p> รวมเวลา : %v ชั่วโมง<p></div>
 		</div>
 		</body>
 		</html>
-	`, TitleDescReq[0].REQUEST_NO, table, tableUsers)
+	`, TitleDescReq[0].REQUEST_NO, table, tableUsers, TitleDescReq[0].MINUTE_DIFF*float64(len(users)))
 
 	// SMTP server configuration
 	smtpHost := "10.145.0.250"
+
 	smtpPort := 25
 	password := os.Getenv("MAIL_PASSWORD")
 
@@ -250,18 +261,13 @@ WHERE REQUEST_NO = @requestNo AND REV = @rev`
 
 	// Send the email
 	if err := dialer.DialAndSend(message); err != nil {
-		fmt.Println(err)
-		return c.JSON(fiber.Map{
-			"err":  true,
-			"msg":  err,
-			"stmt": stmt,
-		})
+
+		fmt.Println("Send mail error:", err)
+		return false
 
 	}
 
-	return c.JSON(fiber.Map{
-		"err": false,
-		"msg": "Email sent successfully!",
-	})
+	fmt.Println("Send sended to:", mail)
+	return true
 
 }

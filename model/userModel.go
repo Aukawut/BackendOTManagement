@@ -87,6 +87,8 @@ type ListUserByRequest struct {
 type UserType struct {
 	ID_UTYPE   int
 	NAME_UTYPE string
+	CREATED_AT interface{}
+	UPDATED_AT interface{}
 }
 
 type UserGroup struct {

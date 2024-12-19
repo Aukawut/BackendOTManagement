@@ -557,6 +557,8 @@ func GetUserType(c *fiber.Ctx) error {
 		errScan := results.Scan(
 			&result.ID_UTYPE,
 			&result.NAME_UTYPE,
+			&result.CREATED_AT,
+			&result.UPDATED_AT,
 		) // Scan เก็บข้อมูลใน Struct
 
 		if errScan != nil {
@@ -673,14 +675,14 @@ func InsertEmployee(c *fiber.Ctx) error {
 	var employeeId string
 
 	if err := c.BodyParser(&req); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+		return c.JSON(fiber.Map{
 			"err": true,
 			"msg": "Invalid request body",
 		})
 	}
 
 	if req.EmployeeCode == "" || req.Prefix == "" || req.FnameTH == "" || req.LnameTH == "" || req.FnameEN == "" || req.LnameEN == "" || req.ActionBy == "" {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+		return c.JSON(fiber.Map{
 			"err": true,
 			"msg": "Data is required!",
 		})
@@ -897,6 +899,63 @@ func DeleteEmployee(c *fiber.Ctx) error {
 }
 
 func GetEmployeeByCode(c *fiber.Ctx) error {
+
+	code := c.Params("code")
+	var detailUser []model.ResultEmployeeByCode
+
+	connString := config.LoadDatabaseConfig()
+
+	db, err := sql.Open("sqlserver", connString)
+
+	if err != nil {
+		fmt.Println("Error creating connection: " + err.Error())
+	}
+	defer db.Close()
+
+	// Test connection
+	err = db.Ping()
+	if err != nil {
+		fmt.Println("Error connecting to the database: " + err.Error())
+	}
+
+	userResult, errUser := db.Query(`SELECT UHR_Prefix_th as Prefix,UHR_EmpCode as EmployeeCode,UHR_FirstName_th as FnameTH,UHR_LastName_th as LnameTH,UHR_FirstName_en as FnameEN,UHR_LastName_en as LnameEN
+  FROM [dbo].[V_AllUserPSTH] WHERE UHR_EmpCode = @code`, sql.Named("code", code))
+
+	if errUser != nil {
+		return c.JSON(fiber.Map{
+			"err": true,
+			"msg": errUser.Error(),
+		})
+	}
+
+	for userResult.Next() {
+		var user model.ResultEmployeeByCode
+
+		errScan := userResult.Scan(&user.Prefix, &user.EmployeeCode, &user.FnameTH, &user.LnameTH, &user.FnameEN, &user.LnameEN)
+		if errScan != nil {
+			fmt.Println(errScan.Error())
+
+		} else {
+			detailUser = append(detailUser, user)
+		}
+	}
+
+	if len(detailUser) > 0 {
+		return c.JSON(fiber.Map{
+			"err":     false,
+			"results": detailUser,
+			"status":  "Ok",
+		})
+	} else {
+		return c.JSON(fiber.Map{
+			"err": true,
+			"msg": "Employee isn't found!",
+		})
+	}
+
+}
+
+func GetAllEmployee(c *fiber.Ctx) error {
 
 	code := c.Params("code")
 	var detailUser []model.ResultEmployeeByCode

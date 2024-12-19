@@ -250,7 +250,15 @@ func RequestOvertime(c *fiber.Ctx) error {
 			}
 		}
 
-		CheckSendEmail(1, running)
+		mail := CheckSendEmail(1, running)
+
+		if mail.Email != "N/A" {
+
+			SendEMailToApprover(running, 1, mail.Email)
+		} else {
+
+			fmt.Println("E-mail address isn't found.")
+		}
 
 		return c.JSON(fiber.Map{
 			"err":    false,

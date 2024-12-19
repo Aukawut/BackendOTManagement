@@ -64,3 +64,20 @@ type SummaryActualByDuration struct {
 	DAY_OT    int
 	COUNT_OT  int
 }
+
+type OvertimeActual struct {
+	EMPLOYEE_CODE  string
+	OT_DATE        string
+	SCAN_IN        string
+	SCAN_OUT       string
+	HOURS          float64
+	FACTORY_NAME   string
+	NAME_UGROUP    string
+	UHR_Department string
+	HOURS_AMOUNT   string
+	NAME_UTYPE     string
+	ID_FACTORY     interface{}
+	ID_UTYPE       interface{}
+	ID_UGROUP      interface{}
+	ID_TYPE_OT     interface{}
+}

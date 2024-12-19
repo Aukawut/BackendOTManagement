@@ -419,3 +419,108 @@ GROUP BY CONVERT(DATE,SCAN_IN)`, sql.Named("start", start), sql.Named("end", end
 	}
 
 }
+
+func SummaryActualOvertime(c *fiber.Ctx) error {
+	var actualAll []model.OvertimeActual
+	start := c.Params("start")
+	end := c.Params("end")
+	ugroup := c.Params("ugroup")
+	fac := c.Params("fac")
+
+	strConfig := config.LoadDatabaseConfig()
+	db, err := sql.Open("sqlserver", strConfig)
+	if err != nil {
+		fmt.Println("Error creating connection: " + err.Error())
+	}
+
+	defer db.Close()
+
+	// Test connection
+	err = db.Ping()
+	if err != nil {
+		fmt.Println("Error connecting to the database: " + err.Error())
+	}
+
+	conditionFactory := ` AND ID_FACTORY = @factory`
+	conditionUGroup := ` AND ID_UGROUP = @ugroup`
+
+	// User isn't filter
+	if fac == "all" {
+		conditionFactory = ""
+	}
+	if ugroup == "all" {
+		conditionUGroup = ""
+	}
+
+	stmt := fmt.Sprintf(`SELECT [EMPLOYEE_CODE]
+      ,[OT_DATE]
+      ,[SCAN_IN]
+      ,[SCAN_OUT]
+      ,[HOURS]
+      ,[FACTORY_NAME]
+      ,[NAME_UGROUP]
+      ,[UHR_Department]
+      ,[HOURS_AMOUNT]
+      ,[NAME_UTYPE]
+      ,[ID_FACTORY]
+      ,[ID_UTYPE]
+      ,[ID_UGROUP]
+      ,[ID_TYPE_OT]
+  FROM [DB_OT_MANAGEMENT].[dbo].[V_Actual_RowsFormat] 
+  WHERE OT_DATE BETWEEN '%s' AND '%s'%s%s  ORDER BY OT_DATE DESC`, start, end, conditionFactory, conditionUGroup)
+
+	rows, errSelect := db.Query(stmt, sql.Named("start", start), sql.Named("end", end), sql.Named("ugroup", ugroup), sql.Named("factory", fac))
+
+	if errSelect != nil {
+		return c.JSON(fiber.Map{
+			"err": true,
+			"msg": errSelect.Error(),
+		})
+	}
+
+	for rows.Next() {
+		var actual model.OvertimeActual
+
+		errorScan := rows.Scan(
+			&actual.EMPLOYEE_CODE,
+			&actual.OT_DATE,
+			&actual.SCAN_IN,
+			&actual.SCAN_OUT,
+			&actual.HOURS,
+			&actual.FACTORY_NAME,
+			&actual.NAME_UGROUP,
+			&actual.UHR_Department,
+			&actual.HOURS_AMOUNT,
+			&actual.NAME_UTYPE,
+			&actual.ID_FACTORY,
+			&actual.ID_UTYPE,
+			&actual.ID_UGROUP,
+			&actual.ID_TYPE_OT,
+		)
+
+		if errorScan != nil {
+			fmt.Println("Error Scan : ", errorScan.Error())
+			return c.JSON(fiber.Map{
+				"err": true,
+				"msg": errorScan.Error(),
+			})
+		} else {
+			actualAll = append(actualAll, actual)
+		}
+	}
+
+	if len(actualAll) > 0 {
+		return c.JSON(fiber.Map{
+			"err":     false,
+			"results": actualAll,
+			"status":  "Ok",
+		})
+	} else {
+		return c.JSON(fiber.Map{
+			"err":     true,
+			"results": actualAll,
+			"msg":     "Not Found",
+		})
+	}
+
+}

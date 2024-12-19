@@ -14,10 +14,14 @@ type ApproverList struct {
 	REV        int
 	MAIL       string
 }
+type MailReturn struct {
+	Email string
+}
 
-func CheckSendEmail(rev int, requestNo string) {
+func CheckSendEmail(rev int, requestNo string) MailReturn {
 
 	var lastedApproved []ApproverList
+	var mailResponse MailReturn
 
 	connString := config.LoadDatabaseConfig()
 
@@ -32,7 +36,8 @@ func CheckSendEmail(rev int, requestNo string) {
 	err = db.Ping()
 	if err != nil {
 		fmt.Println("Error connecting to the database: " + err.Error())
-		return
+		mailResponse.Email = "N/A"
+		return mailResponse
 	}
 
 	step, errStep := db.Query(`SELECT aa.REQUEST_NO,aa.REV,ISNULL(hr.AD_Mail,'N/A') as [AD_Mail] FROM (
@@ -45,7 +50,8 @@ func CheckSendEmail(rev int, requestNo string) {
 
 	if errStep != nil {
 		fmt.Print("Query error : ", errStep.Error())
-		return
+		mailResponse.Email = "N/A"
+		return mailResponse
 	}
 
 	defer step.Close()
@@ -54,6 +60,7 @@ func CheckSendEmail(rev int, requestNo string) {
 		var approver ApproverList
 
 		errScan := step.Scan(&approver.REQUEST_NO, &approver.REV, &approver.MAIL)
+
 		if errScan != nil {
 			fmt.Println(errScan.Error())
 
@@ -64,6 +71,12 @@ func CheckSendEmail(rev int, requestNo string) {
 
 	if len(lastedApproved) > 0 {
 		fmt.Println(lastedApproved)
+		mailResponse.Email = lastedApproved[0].MAIL
+		return mailResponse
+
+	} else {
+		mailResponse.Email = "N/A"
+		return mailResponse
 	}
 
 }

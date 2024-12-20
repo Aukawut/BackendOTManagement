@@ -445,10 +445,10 @@ func SummaryActualOvertime(c *fiber.Ctx) error {
 	conditionUGroup := ` AND ID_UGROUP = @ugroup`
 
 	// User isn't filter
-	if fac == "all" {
+	if fac == "0" {
 		conditionFactory = ""
 	}
-	if ugroup == "all" {
+	if ugroup == "0" {
 		conditionUGroup = ""
 	}
 

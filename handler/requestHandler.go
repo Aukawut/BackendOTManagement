@@ -254,7 +254,7 @@ func RequestOvertime(c *fiber.Ctx) error {
 
 		if mail.Email != "N/A" {
 
-			SendEMailToApprover(running, 1, mail.Email)
+			SendEMailToApprover(running, 1, mail.Email, mail.FULLNAME)
 		} else {
 
 			fmt.Println("E-mail address isn't found.")
@@ -1112,7 +1112,7 @@ WHERE a.CODE_APPROVER = @code AND h.REQUEST_NO = @requestNo AND REV = @rev`,
 				fmt.Println("Query failed: " + errUpdateMainReq.Error())
 			}
 		}
-		fmt.Println("completeStep", completeStep)
+		fmt.Println("Request is completeStep steps", completeStep)
 		fmt.Println("approved", approved)
 
 		// 3 is Done and  All Approved
@@ -1135,9 +1135,10 @@ WHERE a.CODE_APPROVER = @code AND h.REQUEST_NO = @requestNo AND REV = @rev`,
 				fmt.Println("Query failed: " + errUpdate.Error())
 			}
 
+			stmtUpdateApprove := `UPDATE TBL_REQUESTS SET REMARK = @remark ,REQ_STATUS = @status,
+			UPDATED_AT = GETDATE(),UPDATED_BY = @code WHERE REQUEST_NO = @requestNo`
 			// Update Main Request Table
-			_, errUpdateMainReq := db.Exec(`UPDATE TBL_REQUESTS SET REMARK = @remark ,REQ_STATUS = @status,
-			UPDATED_AT = GETDATE(),UPDATED_BY = @code WHERE REQUEST_NO = @requestNo`,
+			_, errUpdateMainReq := db.Exec(stmtUpdateApprove,
 				sql.Named("code", req.ActionBy),
 				sql.Named("status", jobStatus),
 				sql.Named("remark", req.Remark),
@@ -1147,16 +1148,61 @@ WHERE a.CODE_APPROVER = @code AND h.REQUEST_NO = @requestNo AND REV = @rev`,
 			if errUpdateMainReq != nil {
 				fmt.Println("Query failed: " + errUpdateMainReq.Error())
 			}
-
+			var mailRequestor model.MailReturnRequestor
 			//SendMail to Requestor
 
+			intRev, errIntConvert := strconv.Atoi(rev)
+			if errIntConvert != nil {
+				fmt.Println(errIntConvert)
+			} else {
+
+				// Check Mail Requestor
+				mailRequestor = CheckSendEmailRequestor(intRev, requestNo)
+
+				if mailRequestor.MAIL != "N/A" {
+
+					SendEMailToRequestor(requestNo, iRev, mailRequestor.MAIL, mailRequestor.FULLNAME, "อนุมัติ")
+				}
+			}
+
+			fmt.Println(mailRequestor)
+
 		}
+
+		fmt.Println("completeStep", completeStep)
+		fmt.Println("approved", approved)
+		fmt.Println(completeStep)
 
 		// 3 is Done (Status Process Approve)
 		if (completeStep > approved) && req.Status == 3 {
 			fmt.Println("Update Approval Status and Send mail to Next")
+			fmt.Println(currentStepApprover[0].STEP + 1)
+			if (currentStepApprover[0].STEP + 1) <= completeStep {
 
-			CheckSendEmail(iRev, requestNo)
+				// Update Pending to Next Approver
+				stmtUpdateApprove := `UPDATE [dbo].[TBL_APPROVAL] SET [ID_STATUS_APV] = 1 ,[UPDATED_AT] = GETDATE() 
+				WHERE [REQUEST_NO] = @requestNo AND [REV] = @rev AND [STEP] = @step`
+				// Update Main Request Table
+				_, errUpdateStatus := db.Exec(stmtUpdateApprove,
+
+					sql.Named("step", currentStepApprover[0].STEP+1),
+					sql.Named("requestNo", requestNo),
+					sql.Named("rev", iRev),
+				)
+
+				if errUpdateStatus != nil {
+					fmt.Println(errUpdateStatus.Error())
+				} else {
+					// mail
+					mailApprover := CheckSendEmail(iRev, requestNo)
+
+					fmt.Println(mailApprover)
+					if mailApprover.Email != "N/A" {
+						SendEMailToApprover(requestNo, iRev, mailApprover.Email, mailApprover.FULLNAME)
+					}
+				}
+
+			}
 
 		}
 

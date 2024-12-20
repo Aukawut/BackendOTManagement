@@ -11,4 +11,13 @@ type RequestDetailBody struct {
 	END          string
 	MINUTE_DIFF  float64
 	NAME_STATUS  string
+	OT_TYPE      string
+}
+
+type MailReturnRequestor struct {
+	REQUEST_NO string
+	REV        int
+	REQUESTOR  string
+	MAIL       string
+	FULLNAME   string
 }

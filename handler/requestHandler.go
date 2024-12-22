@@ -1007,7 +1007,8 @@ func ApproveRequestByNo(c *fiber.Ctx) error {
 	// Check Step User
 	selectApprover, errorSelect := db.Query(`SELECT a.CODE_APPROVER as APPROVER,a.STEP FROM TBL_REQUESTS_HISTORY h LEFT JOIN 
 TBL_APPROVERS a ON a.ID_GROUP_DEPT = h.ID_GROUP_DEPT AND a.ID_FACTORY = h.ID_FACTORY
-WHERE a.CODE_APPROVER = @code AND h.REQUEST_NO = @requestNo AND REV = @rev`,
+WHERE a.CODE_APPROVER = @code AND h.REQUEST_NO = @requestNo AND REV = @rev  AND 
+STEP NOT IN (SELECT STEP FROM TBL_APPROVAL WHERE REQUEST_NO = @requestNo AND REV = rev AND ID_STATUS_APV = 3)`,
 		sql.Named("code", req.ActionBy),
 		sql.Named("requestNo", requestNo),
 		sql.Named("rev", rev))
@@ -1111,7 +1112,27 @@ WHERE a.CODE_APPROVER = @code AND h.REQUEST_NO = @requestNo AND REV = @rev`,
 			if errUpdateMainReq != nil {
 				fmt.Println("Query failed: " + errUpdateMainReq.Error())
 			}
+			var mailRequestor model.MailReturnRequestor
+			//SendMail to Requestor
+
+			intRev, errIntConvert := strconv.Atoi(rev)
+			if errIntConvert != nil {
+				fmt.Println(errIntConvert)
+			} else {
+
+				// Check Mail Requestor
+				mailRequestor = CheckSendEmailRequestor(intRev, requestNo)
+
+				if mailRequestor.MAIL != "N/A" {
+
+					SendEMailToRequestor(requestNo, iRev, mailRequestor.MAIL, mailRequestor.FULLNAME, "อนุมัติ")
+				}
+			}
+
+			return c.JSON(fiber.Map{"err": false, "msg": "Updated successfully!", "status": "Ok"})
+
 		}
+
 		fmt.Println("Request is completeStep steps", completeStep)
 		fmt.Println("approved", approved)
 
@@ -1176,7 +1197,7 @@ WHERE a.CODE_APPROVER = @code AND h.REQUEST_NO = @requestNo AND REV = @rev`,
 		// 3 is Done (Status Process Approve)
 		if (completeStep > approved) && req.Status == 3 {
 			fmt.Println("Update Approval Status and Send mail to Next")
-			fmt.Println(currentStepApprover[0].STEP + 1)
+			fmt.Println("currentStepApprover", currentStepApprover[0].STEP+1)
 			if (currentStepApprover[0].STEP + 1) <= completeStep {
 
 				// Update Pending to Next Approver

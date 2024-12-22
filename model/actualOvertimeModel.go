@@ -81,3 +81,6 @@ type OvertimeActual struct {
 	ID_UGROUP      interface{}
 	ID_TYPE_OT     interface{}
 }
+type CalActualByFac struct {
+	SUN_HOURS float64
+}

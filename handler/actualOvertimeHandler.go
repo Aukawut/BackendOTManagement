@@ -524,3 +524,71 @@ func SummaryActualOvertime(c *fiber.Ctx) error {
 	}
 
 }
+
+func CalActualByFactory(c *fiber.Ctx) error {
+	var actualAll []model.CalActualByFac
+	year := c.Params("year")
+	month := c.Params("month")
+	fac := c.Params("fac")
+
+	strConfig := config.LoadDatabaseConfig()
+	db, err := sql.Open("sqlserver", strConfig)
+	if err != nil {
+		fmt.Println("Error creating connection: " + err.Error())
+	}
+
+	defer db.Close()
+
+	// Test connection
+	err = db.Ping()
+	if err != nil {
+		fmt.Println("Error connecting to the database: " + err.Error())
+	}
+
+	stmt := `SELECT SUM(TOTAL_HOURS) as SUN_HOURS FROM TBL_ACTUAL_OVERTIME a
+LEFT JOIN (SELECT * FROM Func_GetTempTableAllEmployee()) hr ON a.EMPLOYEE_CODE = hr.EMPLOYEE_CODE_INT
+WHERE MONTH(CONVERT(DATE,a.SCAN_IN)) = @month  AND hr.ID_FACTORY = @factory
+AND YEAR(CONVERT(DATE,a.SCAN_IN)) = @year GROUP BY ID_FACTORY`
+
+	rows, errSelect := db.Query(stmt, sql.Named("month", month), sql.Named("factory", fac), sql.Named("year", year))
+
+	if errSelect != nil {
+		return c.JSON(fiber.Map{
+			"err": true,
+			"msg": errSelect.Error(),
+		})
+	}
+
+	for rows.Next() {
+		var actual model.CalActualByFac
+
+		errorScan := rows.Scan(
+			&actual.SUN_HOURS,
+		)
+
+		if errorScan != nil {
+			fmt.Println("Error Scan : ", errorScan.Error())
+			return c.JSON(fiber.Map{
+				"err": true,
+				"msg": errorScan.Error(),
+			})
+		} else {
+			actualAll = append(actualAll, actual)
+		}
+	}
+
+	if len(actualAll) > 0 {
+		return c.JSON(fiber.Map{
+			"err":     false,
+			"results": actualAll,
+			"status":  "Ok",
+		})
+	} else {
+		return c.JSON(fiber.Map{
+			"err":     true,
+			"results": actualAll,
+			"msg":     "Not Found",
+		})
+	}
+
+}

@@ -105,6 +105,7 @@ func main() {
 	app.Get("/actual/count/:start/:end/:ugroup", jwt.DecodeToken, handler.GetCountActualOvertime)
 	app.Get("/actual/summary/date/:start/:end/:ugroup", jwt.DecodeToken, handler.SummaryActualByDate)
 	app.Get("/actual/ot/:start/:end/:ugroup/:fac", jwt.DecodeToken, handler.SummaryActualOvertime)
+	app.Get("/actual/cal/:year/:month/:fac", jwt.DecodeToken, handler.CalActualByFactory)
 
 	app.Post("/permission/user", jwt.DecodeTokenAdmin, handler.InsertUserPermission)
 	app.Put("/permission/user/:id", jwt.DecodeTokenAdmin, handler.UpdateUserPermission)

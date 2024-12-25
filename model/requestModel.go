@@ -46,10 +46,15 @@ type ResultCheckApproved struct {
 }
 
 type ResultRequestByUser struct {
-	REQUEST_NO  string
-	REQ_STATUS  int
-	REV         int
-	NAME_STATUS string
+	REQUEST_NO    string
+	REV           int
+	NAME_STATUS   string
+	PERSON        int
+	START_DATE    string
+	END_DATE      string
+	DURATION      float64
+	FACTORY_NAME  string
+	NAME_WORKCELL string
 }
 
 type ApproverPendingAll struct {
@@ -102,6 +107,7 @@ type SummaryRequestLastRev struct {
 	SUM_PLAN      float64
 	SUM_PLAN_OB   float64
 	ID_WORK_CELL  int
+	REMARK        string
 }
 
 type RequestCommentApprover struct {
@@ -121,9 +127,14 @@ type BodyApproveRequest struct {
 	Status   int    `json:"status"`
 	ActionBy string `json:"actionBy"`
 	Remark   string `json:"remark"`
+	Special  string `json:"special"`
 }
 
 type ResponseApproverStepByReq struct {
 	APPROVER string
 	STEP     int
+}
+
+type CountRequestByStatus struct {
+	STATUS_PENDING int
 }

@@ -849,13 +849,19 @@ func GetRequestByEmpCode(c *fiber.Ctx) error {
 		fmt.Println("Error connecting to the database: " + err.Error())
 	}
 
-	query := `SELECT a.REQUEST_NO,a.REQ_STATUS,b.REV,s.NAME_STATUS FROM (
-			SELECT REQUEST_NO,REQ_STATUS FROM TBL_REQUESTS WHERE CREATED_BY = @code 
-			GROUP BY REQUEST_NO,REQ_STATUS ) a
-			LEFT JOIN (SELECT REQUEST_NO,MAX(REV) as REV FROM TBL_REQUESTS_HISTORY h 
-			GROUP BY REQUEST_NO) b ON a.REQUEST_NO = b.REQUEST_NO 
-			LEFT JOIN TBL_REQ_STATUS s ON a.REQ_STATUS = s.ID_STATUS
-			ORDER BY a.REQUEST_NO DESC`
+	query := `SELECT h.REQUEST_NO,h.REV,s.NAME_STATUS,p.PERSON,START_DATE,END_DATE,
+			CAST(DATEDIFF(MINUTE,START_DATE,END_DATE)/60  as decimal(18,2)) as DURATION,
+			f.FACTORY_NAME,wc.NAME_WORKCELL
+			FROM TBL_REQUESTS_HISTORY h
+			LEFT JOIN TBL_REQ_STATUS s ON h.REQ_STATUS = s.ID_STATUS
+			LEFT JOIN (
+				SELECT COUNT(*) as PERSON, u.REQUEST_NO,u.REV 
+			FROM TBL_USERS_REQ u GROUP BY u.REQUEST_NO,u.REV
+			) p ON h.REQUEST_NO = p.REQUEST_NO AND h.REV = p.REV
+			LEFT JOIN TBL_FACTORY f ON h.ID_FACTORY = f.ID_FACTORY
+			LEFT JOIN TBL_WORKCELL wc ON h.ID_WORK_CELL = wc.ID_WORK_CELL
+			WHERE h.CREATED_BY = @code
+			`
 
 	results, errorQuery := db.Query(query, sql.Named("code", empCode)) //Query
 
@@ -866,7 +872,9 @@ func GetRequestByEmpCode(c *fiber.Ctx) error {
 	for results.Next() {
 		var result model.ResultRequestByUser
 
-		errScan := results.Scan(&result.REQUEST_NO, &result.REQ_STATUS, &result.REV, &result.NAME_STATUS) // Scan เก็บข้อมูลใน Struct
+		errScan := results.Scan(&result.REQUEST_NO, &result.REV, &result.NAME_STATUS, &result.PERSON,
+			&result.START_DATE, &result.END_DATE, &result.DURATION, &result.FACTORY_NAME, &result.NAME_WORKCELL,
+		) // Scan เก็บข้อมูลใน Struct
 		if errScan != nil {
 			fmt.Println("Row scan failed: " + errScan.Error())
 
@@ -1031,15 +1039,18 @@ STEP NOT IN (SELECT STEP FROM TBL_APPROVAL WHERE REQUEST_NO = @requestNo AND REV
 
 		// Update Status Approve
 
-		_, errUpdate := db.Exec(`UPDATE [dbo].[TBL_APPROVAL] SET 
-		[CODE_APPROVER] = @code,[ID_STATUS_APV] = @status,[REMARK] = @remark,[UPDATED_AT] = GETDATE() 
-		WHERE [REQUEST_NO] = @requestNo AND [REV] = @rev AND [STEP] = @step`,
+		stmtUpdateApproval := `UPDATE [dbo].[TBL_APPROVAL] SET 
+		[CODE_APPROVER] = @code,[ID_STATUS_APV] = @status,[REMARK] = @remark,[UPDATED_AT] = GETDATE() ,[SPECIAL_OT] = @special
+		WHERE [REQUEST_NO] = @requestNo AND [REV] = @rev AND [STEP] = @step`
+
+		_, errUpdate := db.Exec(stmtUpdateApproval,
 			sql.Named("code", req.ActionBy),
 			sql.Named("status", req.Status),
 			sql.Named("remark", req.Remark),
 			sql.Named("requestNo", requestNo),
 			sql.Named("rev", rev),
 			sql.Named("step", currentStepApprover[0].STEP),
+			sql.Named("special", req.Special),
 		)
 
 		if errUpdate != nil {
@@ -1087,13 +1098,13 @@ STEP NOT IN (SELECT STEP FROM TBL_APPROVAL WHERE REQUEST_NO = @requestNo AND REV
 			fmt.Println("Update Status Request and Send Mail to Requestor")
 
 			// Update History Table
-			_, errUpdate := db.Exec(`UPDATE TBL_REQUESTS_HISTORY SET REMARK = @remark ,REQ_STATUS = @status,
-			UPDATED_AT = GETDATE(),UPDATED_BY = @code WHERE REQUEST_NO = @requestNo AND REV = @rev`,
+			_, errUpdate := db.Exec(`UPDATE TBL_REQUESTS_HISTORY SET REQ_STATUS = @status,
+			UPDATED_AT = GETDATE(),UPDATED_BY = @code,[SPECIAL_OT] = @special WHERE REQUEST_NO = @requestNo AND REV = @rev`,
 				sql.Named("code", req.ActionBy),
 				sql.Named("status", jobStatus),
-				sql.Named("remark", req.Remark),
 				sql.Named("requestNo", requestNo),
 				sql.Named("rev", rev),
+				sql.Named("special", req.Special),
 			)
 
 			if errUpdate != nil {
@@ -1101,12 +1112,12 @@ STEP NOT IN (SELECT STEP FROM TBL_APPROVAL WHERE REQUEST_NO = @requestNo AND REV
 			}
 
 			// Update Main Request Table
-			_, errUpdateMainReq := db.Exec(`UPDATE TBL_REQUESTS SET REMARK = @remark ,REQ_STATUS = @status,
-			UPDATED_AT = GETDATE(),UPDATED_BY = @code WHERE REQUEST_NO = @requestNo`,
+			_, errUpdateMainReq := db.Exec(`UPDATE TBL_REQUESTS SET REQ_STATUS = @status,
+			UPDATED_AT = GETDATE(),UPDATED_BY = @code,[SPECIAL_OT] = @special WHERE REQUEST_NO = @requestNo`,
 				sql.Named("code", req.ActionBy),
 				sql.Named("status", jobStatus),
-				sql.Named("remark", req.Remark),
 				sql.Named("requestNo", requestNo),
+				sql.Named("special", req.Special),
 			)
 
 			if errUpdateMainReq != nil {
@@ -1123,9 +1134,19 @@ STEP NOT IN (SELECT STEP FROM TBL_APPROVAL WHERE REQUEST_NO = @requestNo AND REV
 				// Check Mail Requestor
 				mailRequestor = CheckSendEmailRequestor(intRev, requestNo)
 
+				status := ""
+
+				if req.Status == 2 {
+					status = "Reject"
+				} else if req.Status == 3 {
+					status = "อนุมัติ"
+				} else if req.Status == 4 {
+					status = "ไม่อนุมัติ"
+				}
+
 				if mailRequestor.MAIL != "N/A" {
 
-					SendEMailToRequestor(requestNo, iRev, mailRequestor.MAIL, mailRequestor.FULLNAME, "อนุมัติ")
+					SendEMailToRequestor(requestNo, iRev, mailRequestor.MAIL, mailRequestor.FULLNAME, status)
 				}
 			}
 
@@ -1461,6 +1482,7 @@ func SummaryLastRevRequestAll(c *fiber.Ctx) error {
 func SummaryLastRevRequestAllByReqNo(c *fiber.Ctx) error {
 	info := []model.SummaryRequestLastRev{}
 	reqNo := c.Params("reqNo")
+	rev := c.Params("rev")
 
 	connString := config.LoadDatabaseConfig()
 
@@ -1478,8 +1500,8 @@ func SummaryLastRevRequestAllByReqNo(c *fiber.Ctx) error {
 	}
 
 	query := `SELECT r.REQUEST_NO,h.REV ,s.NAME_STATUS,hr.UHR_FullName_th as FULLNAME,tot.HOURS_AMOUNT as OT_TYPE,f.FACTORY_NAME,wg.NAME_WORKGRP,
-	wc.NAME_WORKCELL,us.USERS as USERS_AMOUNT,mi.SUM_MINUTE,r.START_DATE,r.END_DATE,f.ID_FACTORY,ISNULL(pln.SUM_PLAN,0) as [SUM_PLAN],ISNULL(pln.SUM_PLAN_OB,0) as [SUM_PLAN_OB],wc.ID_WORK_CELL FROM  [dbo].[TBL_REQUESTS] r LEFT JOIN 
-	(SELECT MAX(REV) as REV,REQUEST_NO FROM TBL_REQUESTS_HISTORY GROUP BY REQUEST_NO) h ON
+	wc.NAME_WORKCELL,us.USERS as USERS_AMOUNT,mi.SUM_MINUTE,r.START_DATE,r.END_DATE,f.ID_FACTORY,ISNULL(pln.SUM_PLAN,0) as [SUM_PLAN],ISNULL(pln.SUM_PLAN_OB,0) as [SUM_PLAN_OB],wc.ID_WORK_CELL,h.REMARK FROM  [dbo].[TBL_REQUESTS] r LEFT JOIN 
+	(SELECT REV,REQUEST_NO,REMARK FROM TBL_REQUESTS_HISTORY) h ON
 	r.REQUEST_NO = h.REQUEST_NO
 	LEFT JOIN TBL_REQ_STATUS s ON r.REQ_STATUS = s.ID_STATUS
 	LEFT JOIN V_AllUserPSTH hr ON r.CREATED_BY COLLATE thai_CI_AS = hr.UHR_EmpCode COLLATE thai_CI_AS 
@@ -1505,10 +1527,10 @@ func SummaryLastRevRequestAllByReqNo(c *fiber.Ctx) error {
 	pp ON pwc.ID_FACTORY = pp.ID_FACTORY AND pwc.YEAR = pp.YEAR AND pwc.MONTH = pp.MONTH
 	)pln ON r.ID_FACTORY = pln.ID_FACTORY AND YEAR(r.START_DATE) = pln.[YEAR] AND MONTH(r.START_DATE) = pln.[MONTH]
 
-   WHERE r.REQUEST_NO = @reqNo
+   WHERE h.REQUEST_NO = @reqNo AND h.REV = @rev
    ORDER BY r.REQUEST_NO DESC`
 
-	results, errorQuery := db.Query(query, sql.Named("reqNo", reqNo)) //Query
+	results, errorQuery := db.Query(query, sql.Named("reqNo", reqNo), sql.Named("rev", rev)) //Query
 
 	if errorQuery != nil {
 		fmt.Println("Query failed: " + errorQuery.Error())
@@ -1534,6 +1556,7 @@ func SummaryLastRevRequestAllByReqNo(c *fiber.Ctx) error {
 			&result.SUM_PLAN,
 			&result.SUM_PLAN_OB,
 			&result.ID_WORK_CELL,
+			&result.REMARK,
 		) // Scan เก็บข้อมูลใน Struct
 
 		if errScan != nil {
@@ -1633,4 +1656,540 @@ ORDER BY a.UPDATED_AT DESC`
 			"results": info,
 		})
 	}
+}
+
+func GetRequestListByStatusApprove(c *fiber.Ctx) error {
+	var actualAll []model.RequestList
+	code := c.Params("code")
+	status := c.Params("status")
+	fmt.Println(code)
+	strConfig := config.LoadDatabaseConfig()
+	db, err := sql.Open("sqlserver", strConfig)
+	if err != nil {
+		fmt.Println("Error creating connection: " + err.Error())
+	}
+
+	defer db.Close()
+
+	// Test connection
+	err = db.Ping()
+	if err != nil {
+		fmt.Println("Error connecting to the database: " + err.Error())
+	}
+
+	stmt := `SELECT m.REQUEST_NO,m.REV,m.FACTORY_NAME,m.ID_TYPE_OT,CONCAT('OT',m.HOURS_AMOUNT) as HOURS_AMOUNT,p.PERSON,du.DURATION,p.PERSON * du.DURATION as HOURS_TOTAL FROM (
+  SELECT MAX(a.REV) as REV,a.REQUEST_NO,t.ID_TYPE_OT,t.HOURS_AMOUNT,f.FACTORY_NAME FROM TBL_APPROVAL a
+  LEFT JOIN TBL_REQUESTS_HISTORY h ON a.REQUEST_NO = h.REQUEST_NO AND a.REV = h.REV
+  LEFT JOIN TBL_GROUP_DEPT d ON h.ID_GROUP_DEPT = d.ID_GROUP_DEPT
+  LEFT JOIN TBL_FACTORY f ON f.ID_FACTORY = h.ID_FACTORY
+  LEFT JOIN TBL_APPROVERS ap ON ap.ID_GROUP_DEPT = d.ID_GROUP_DEPT AND ap.ID_FACTORY = f.ID_FACTORY
+  LEFT JOIN TBL_OT_TYPE t ON h.ID_TYPE_OT = t.ID_TYPE_OT
+ 
+  WHERE ap.CODE_APPROVER = @code AND a.ID_STATUS_APV = @status
+   GROUP BY a.REQUEST_NO,t.ID_TYPE_OT,t.HOURS_AMOUNT,f.FACTORY_NAME ) m 
+    LEFT JOIN (SELECT COUNT(*) as PERSON,REQUEST_NO,REV FROM TBL_USERS_REQ u GROUP BY REQUEST_NO,REV) p 
+	ON m.REQUEST_NO = p.REQUEST_NO AND m.REV = p.REV
+	LEFT JOIN (SELECT REQUEST_NO,REV,CAST(DATEDIFF(MINUTE,START_DATE,END_DATE)/60 as decimal(18,2)) as DURATION 
+	FROM TBL_REQUESTS_HISTORY) du ON m.REQUEST_NO = du.REQUEST_NO AND m.REV = du.REV`
+
+	rows, errSelect := db.Query(stmt, sql.Named("code", code), sql.Named("status", status))
+
+	if errSelect != nil {
+		return c.JSON(fiber.Map{
+			"err": true,
+			"msg": errSelect.Error(),
+		})
+	}
+
+	for rows.Next() {
+		var actual model.RequestList
+
+		errorScan := rows.Scan(
+			&actual.REQUEST_NO,
+			&actual.REV,
+			&actual.FACTORY_NAME,
+			&actual.ID_TYPE_OT,
+			&actual.HOURS_AMOUNT,
+			&actual.PERSON,
+			&actual.DURATION,
+			&actual.HOURS_TOTAL,
+		)
+
+		if errorScan != nil {
+			fmt.Println("Error Scan : ", errorScan.Error())
+			return c.JSON(fiber.Map{
+				"err": true,
+				"msg": errorScan.Error(),
+			})
+		} else {
+			actualAll = append(actualAll, actual)
+		}
+	}
+
+	if len(actualAll) > 0 {
+		return c.JSON(fiber.Map{
+			"err":     false,
+			"results": actualAll,
+			"status":  "Ok",
+		})
+	} else {
+		return c.JSON(fiber.Map{
+			"err":     true,
+			"results": actualAll,
+			"msg":     "Not Found",
+		})
+	}
+
+}
+
+func GetRequestListByStatusApproveAndCode(c *fiber.Ctx) error {
+	var actualAll []model.RequestList
+	code := c.Params("code")
+	status := c.Params("status")
+
+	strConfig := config.LoadDatabaseConfig()
+	db, err := sql.Open("sqlserver", strConfig)
+	if err != nil {
+		fmt.Println("Error creating connection: " + err.Error())
+	}
+
+	defer db.Close()
+
+	// Test connection
+	err = db.Ping()
+	if err != nil {
+		fmt.Println("Error connecting to the database: " + err.Error())
+	}
+
+	stmt := `SELECT  mt.*,mt.PERSON * mt.DURATION as HOURS_TOTAL FROM (
+  SELECT DISTINCT h.REQUEST_NO,h.REV,f.FACTORY_NAME,ot.ID_TYPE_OT,CONCAT('OT',ot.HOURS_AMOUNT) as [HOURS_AMOUNT],p.PERSON,CAST(DATEDIFF(MINUTE,h.START_DATE,h.END_DATE) / 60  as decimal(18,2))as DURATION FROM TBL_APPROVAL a 
+  LEFT JOIN TBL_REQUESTS_HISTORY h ON h.REQUEST_NO = a.REQUEST_NO AND a.REV = h.REV
+  LEFT JOIN TBL_OT_TYPE ot ON h.ID_TYPE_OT = ot.ID_TYPE_OT
+  LEFT JOIN TBL_FACTORY f ON h.ID_FACTORY = f.ID_FACTORY
+  LEFT JOIN (SELECT COUNT(*) as PERSON,REQUEST_NO,REV FROM TBL_USERS_REQ u GROUP BY REQUEST_NO,REV) p 
+  ON h.REQUEST_NO = p.REQUEST_NO AND h.REV = p.REV
+  WHERE a.CODE_APPROVER = @code AND h.REQUEST_NO IS NOT NULL
+  AND a.ID_STATUS_APV = @status)mt`
+
+	rows, errSelect := db.Query(stmt, sql.Named("code", code), sql.Named("status", status))
+
+	if errSelect != nil {
+		return c.JSON(fiber.Map{
+			"err": true,
+			"msg": errSelect.Error(),
+		})
+	}
+
+	for rows.Next() {
+		var actual model.RequestList
+
+		errorScan := rows.Scan(
+			&actual.REQUEST_NO,
+			&actual.REV,
+			&actual.FACTORY_NAME,
+			&actual.ID_TYPE_OT,
+			&actual.HOURS_AMOUNT,
+			&actual.PERSON,
+			&actual.DURATION,
+			&actual.HOURS_TOTAL,
+		)
+
+		if errorScan != nil {
+			fmt.Println("Error Scan : ", errorScan.Error())
+			return c.JSON(fiber.Map{
+				"err": true,
+				"msg": errorScan.Error(),
+			})
+		} else {
+			actualAll = append(actualAll, actual)
+		}
+	}
+
+	if len(actualAll) > 0 {
+		return c.JSON(fiber.Map{
+			"err":     false,
+			"results": actualAll,
+			"status":  "Ok",
+		})
+	} else {
+		return c.JSON(fiber.Map{
+			"err":     true,
+			"results": actualAll,
+			"msg":     "Not Found",
+		})
+	}
+
+}
+
+func GetUserRequestListByStatusPendApprove(c *fiber.Ctx) error {
+	var actualAll []model.RequestList
+	code := c.Params("code")
+	status := c.Params("status")
+
+	strConfig := config.LoadDatabaseConfig()
+	db, err := sql.Open("sqlserver", strConfig)
+	if err != nil {
+		fmt.Println("Error creating connection: " + err.Error())
+	}
+
+	defer db.Close()
+
+	// Test connection
+	err = db.Ping()
+	if err != nil {
+		fmt.Println("Error connecting to the database: " + err.Error())
+	}
+
+	stmt := `SELECT m.REQUEST_NO,m.REV,m.FACTORY_NAME,m.ID_TYPE_OT,CONCAT('OT',m.HOURS_AMOUNT) as HOURS_AMOUNT,p.PERSON,du.DURATION,p.PERSON * du.DURATION as HOURS_TOTAL FROM (
+  SELECT MAX(a.REV) as REV,a.REQUEST_NO,t.ID_TYPE_OT,t.HOURS_AMOUNT,f.FACTORY_NAME FROM TBL_APPROVAL a
+  LEFT JOIN TBL_REQUESTS_HISTORY h ON a.REQUEST_NO = h.REQUEST_NO AND a.REV = h.REV
+  LEFT JOIN TBL_GROUP_DEPT d ON h.ID_GROUP_DEPT = d.ID_GROUP_DEPT
+  LEFT JOIN TBL_FACTORY f ON f.ID_FACTORY = h.ID_FACTORY
+  LEFT JOIN TBL_APPROVERS ap ON ap.ID_GROUP_DEPT = d.ID_GROUP_DEPT AND ap.ID_FACTORY = f.ID_FACTORY
+  LEFT JOIN TBL_OT_TYPE t ON h.ID_TYPE_OT = t.ID_TYPE_OT
+ 
+  WHERE h.CREATED_BY = @code AND a.ID_STATUS_APV = @status
+   GROUP BY a.REQUEST_NO,t.ID_TYPE_OT,t.HOURS_AMOUNT,f.FACTORY_NAME ) m 
+    LEFT JOIN (SELECT COUNT(*) as PERSON,REQUEST_NO,REV FROM TBL_USERS_REQ u GROUP BY REQUEST_NO,REV) p 
+	ON m.REQUEST_NO = p.REQUEST_NO AND m.REV = p.REV
+	LEFT JOIN (SELECT REQUEST_NO,REV,CAST(DATEDIFF(MINUTE,START_DATE,END_DATE)/60 as decimal(18,2)) as DURATION 
+	FROM TBL_REQUESTS_HISTORY) du ON m.REQUEST_NO = du.REQUEST_NO AND m.REV = du.REV`
+
+	rows, errSelect := db.Query(stmt, sql.Named("code", code), sql.Named("status", status))
+
+	if errSelect != nil {
+		return c.JSON(fiber.Map{
+			"err": true,
+			"msg": errSelect.Error(),
+		})
+	}
+
+	for rows.Next() {
+		var actual model.RequestList
+
+		errorScan := rows.Scan(
+			&actual.REQUEST_NO,
+			&actual.REV,
+			&actual.FACTORY_NAME,
+			&actual.ID_TYPE_OT,
+			&actual.HOURS_AMOUNT,
+			&actual.PERSON,
+			&actual.DURATION,
+			&actual.HOURS_TOTAL,
+		)
+
+		if errorScan != nil {
+			fmt.Println("Error Scan : ", errorScan.Error())
+			return c.JSON(fiber.Map{
+				"err": true,
+				"msg": errorScan.Error(),
+			})
+		} else {
+			actualAll = append(actualAll, actual)
+		}
+	}
+
+	if len(actualAll) > 0 {
+		return c.JSON(fiber.Map{
+			"err":     false,
+			"results": actualAll,
+			"status":  "Ok",
+		})
+	} else {
+		return c.JSON(fiber.Map{
+			"err":     true,
+			"results": actualAll,
+			"msg":     "Not Found",
+		})
+	}
+
+}
+
+func GetUserRequestListByStatusApprove(c *fiber.Ctx) error {
+	var actualAll []model.RequestList
+	code := c.Params("code")
+	status := c.Params("status")
+
+	strConfig := config.LoadDatabaseConfig()
+	db, err := sql.Open("sqlserver", strConfig)
+	if err != nil {
+		fmt.Println("Error creating connection: " + err.Error())
+	}
+
+	defer db.Close()
+
+	// Test connection
+	err = db.Ping()
+	if err != nil {
+		fmt.Println("Error connecting to the database: " + err.Error())
+	}
+
+	stmt := `SELECT mt.*,mt.PERSON * mt.DURATION as HOURS_TOTAL FROM (
+	SELECT h.REQUEST_NO,h.REV,f.FACTORY_NAME,t.ID_TYPE_OT,CONCAT('OT',t.HOURS_AMOUNT) as HOURS_AMOUNT,p.PERSON,CAST(DATEDIFF(MINUTE,h.START_DATE,h.END_DATE)/60 as decimal(18,2)) as DURATION  
+	FROM TBL_REQUESTS_HISTORY h
+	LEFT JOIN TBL_FACTORY f ON h.ID_FACTORY = f.ID_FACTORY
+	LEFT JOIN TBL_OT_TYPE t ON h.ID_TYPE_OT = t.ID_TYPE_OT
+	
+	LEFT JOIN (
+	SELECT COUNT(*) as PERSON,REQUEST_NO,REV FROM TBL_USERS_REQ u GROUP BY REQUEST_NO,REV
+	) p 
+	ON h.REQUEST_NO = p.REQUEST_NO AND h.REV = p.REV 
+	WHERE h.CREATED_BY = @code AND h.REQ_STATUS = @status
+	) mt`
+
+	rows, errSelect := db.Query(stmt, sql.Named("code", code), sql.Named("status", status))
+
+	if errSelect != nil {
+		return c.JSON(fiber.Map{
+			"err": true,
+			"msg": errSelect.Error(),
+		})
+	}
+
+	for rows.Next() {
+		var actual model.RequestList
+
+		errorScan := rows.Scan(
+			&actual.REQUEST_NO,
+			&actual.REV,
+			&actual.FACTORY_NAME,
+			&actual.ID_TYPE_OT,
+			&actual.HOURS_AMOUNT,
+			&actual.PERSON,
+			&actual.DURATION,
+			&actual.HOURS_TOTAL,
+		)
+
+		if errorScan != nil {
+			fmt.Println("Error Scan : ", errorScan.Error())
+			return c.JSON(fiber.Map{
+				"err": true,
+				"msg": errorScan.Error(),
+			})
+		} else {
+			actualAll = append(actualAll, actual)
+		}
+	}
+
+	if len(actualAll) > 0 {
+		return c.JSON(fiber.Map{
+			"err":     false,
+			"results": actualAll,
+			"status":  "Ok",
+		})
+	} else {
+		return c.JSON(fiber.Map{
+			"err":     true,
+			"results": actualAll,
+			"msg":     "Not Found",
+		})
+	}
+
+}
+
+func CountRequestByStatusAndCode(c *fiber.Ctx) error {
+	var amountRequest []model.CountRequestByStatus
+	code := c.Params("code")
+	status := c.Params("status")
+
+	strConfig := config.LoadDatabaseConfig()
+	db, err := sql.Open("sqlserver", strConfig)
+	if err != nil {
+		fmt.Println("Error creating connection: " + err.Error())
+	}
+
+	defer db.Close()
+
+	// Test connection
+	err = db.Ping()
+	if err != nil {
+		fmt.Println("Error connecting to the database: " + err.Error())
+	}
+
+	stmt := `SELECT COUNT(*) as STATUS_PENDING FROM TBL_REQUESTS WHERE REQ_STATUS = @status AND CREATED_BY = @code`
+
+	rows, errSelect := db.Query(stmt, sql.Named("code", code), sql.Named("status", status))
+
+	if errSelect != nil {
+		return c.JSON(fiber.Map{
+			"err": true,
+			"msg": errSelect.Error(),
+		})
+	}
+
+	for rows.Next() {
+		var actual model.CountRequestByStatus
+
+		errorScan := rows.Scan(
+			&actual.STATUS_PENDING,
+		)
+
+		if errorScan != nil {
+			fmt.Println("Error Scan : ", errorScan.Error())
+			return c.JSON(fiber.Map{
+				"err": true,
+				"msg": errorScan.Error(),
+			})
+		} else {
+			amountRequest = append(amountRequest, actual)
+		}
+	}
+
+	if len(amountRequest) > 0 {
+		return c.JSON(fiber.Map{
+			"err":     false,
+			"results": amountRequest,
+			"status":  "Ok",
+		})
+	} else {
+		return c.JSON(fiber.Map{
+			"err":     true,
+			"results": amountRequest,
+			"msg":     "Not Found",
+		})
+	}
+
+}
+
+func CountRequestStatusAndApproveByCode(c *fiber.Ctx) error {
+	var amountRequest []model.CountRequestByStatus
+	code := c.Params("code")
+	status := c.Params("status")
+
+	strConfig := config.LoadDatabaseConfig()
+	db, err := sql.Open("sqlserver", strConfig)
+	if err != nil {
+		fmt.Println("Error creating connection: " + err.Error())
+	}
+
+	defer db.Close()
+
+	// Test connection
+	err = db.Ping()
+	if err != nil {
+		fmt.Println("Error connecting to the database: " + err.Error())
+	}
+
+	stmt := `SELECT  COUNT(*) as [STATUS_PENDING] FROM TBL_APPROVAL  a
+LEFT JOIN TBL_REQUESTS_HISTORY h ON a.REQUEST_NO = h.REQUEST_NO AND a.REV = h.REV
+LEFT JOIN TBL_APPROVERS ap ON h.ID_FACTORY = ap.ID_FACTORY AND h.ID_GROUP_DEPT = ap.ID_GROUP_DEPT
+WHERE ap.CODE_APPROVER = @code AND a.ID_STATUS_APV = @status`
+
+	rows, errSelect := db.Query(stmt, sql.Named("code", code), sql.Named("status", status))
+
+	if errSelect != nil {
+		return c.JSON(fiber.Map{
+			"err": true,
+			"msg": errSelect.Error(),
+		})
+	}
+
+	for rows.Next() {
+		var actual model.CountRequestByStatus
+
+		errorScan := rows.Scan(
+			&actual.STATUS_PENDING,
+		)
+
+		if errorScan != nil {
+			fmt.Println("Error Scan : ", errorScan.Error())
+			return c.JSON(fiber.Map{
+				"err": true,
+				"msg": errorScan.Error(),
+			})
+		} else {
+			amountRequest = append(amountRequest, actual)
+		}
+	}
+	fmt.Println(amountRequest)
+
+	if len(amountRequest) > 0 {
+		return c.JSON(fiber.Map{
+			"err":     false,
+			"results": amountRequest,
+			"status":  "Ok",
+		})
+	} else {
+		return c.JSON(fiber.Map{
+			"err":     true,
+			"results": amountRequest,
+			"msg":     "Not Found",
+		})
+	}
+
+}
+
+func GetDetailOldRequestByStatus(c *fiber.Ctx) error {
+	var details []model.OldRequestDetail
+
+	requestNo := c.Params("requestNo")
+	status := c.Params("status")
+	rev := c.Params("rev")
+
+	strConfig := config.LoadDatabaseConfig()
+	db, err := sql.Open("sqlserver", strConfig)
+	if err != nil {
+		fmt.Println("Error creating connection: " + err.Error())
+	}
+
+	defer db.Close()
+
+	// Test connection
+	err = db.Ping()
+	if err != nil {
+		fmt.Println("Error connecting to the database: " + err.Error())
+	}
+
+	stmt := `SELECT REQUEST_NO,REV,ID_FACTORY,ID_GROUP_DEPT,ID_WORK_CELL,START_DATE,END_DATE,ID_TYPE_OT,ID_WORKGRP FROM TBL_REQUESTS_HISTORY 
+WHERE REQUEST_NO = @requestNo AND REV = @rev AND REQ_STATUS = @status`
+
+	rows, errSelect := db.Query(stmt, sql.Named("requestNo", requestNo), sql.Named("rev", rev), sql.Named("status", status))
+
+	if errSelect != nil {
+		return c.JSON(fiber.Map{
+			"err": true,
+			"msg": errSelect.Error(),
+		})
+	}
+
+	for rows.Next() {
+		var info model.OldRequestDetail
+
+		errorScan := rows.Scan(
+			&info.REQUEST_NO,
+			&info.REV,
+			&info.ID_FACTORY,
+			&info.ID_GROUP_DEPT,
+			&info.ID_WORK_CELL,
+			&info.START_DATE,
+			&info.END_DATE,
+			&info.ID_TYPE_OT,
+			&info.ID_WORKGRP,
+		)
+
+		if errorScan != nil {
+			fmt.Println("Error Scan : ", errorScan.Error())
+			return c.JSON(fiber.Map{
+				"err": true,
+				"msg": errorScan.Error(),
+			})
+		} else {
+			details = append(details, info)
+		}
+	}
+
+	if len(details) > 0 {
+		return c.JSON(fiber.Map{
+			"err":     false,
+			"results": details,
+			"status":  "Ok",
+		})
+	} else {
+		return c.JSON(fiber.Map{
+			"err":     true,
+			"results": details,
+			"msg":     "Not Found",
+		})
+	}
+
 }

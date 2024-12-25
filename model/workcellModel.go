@@ -11,3 +11,9 @@ type WorkCellJoinFactory struct {
 	ID_FACTORY    int
 	FACTORY_NAME  string
 }
+
+type ReqWorkCellBody struct {
+	ID_WORKGRP   int    `json:"workgroup"`
+	ID_FACTORY   int    `json:"factory"`
+	NAME_WORKCEL string `json:"name"`
+}

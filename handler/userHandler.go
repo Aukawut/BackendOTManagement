@@ -80,6 +80,57 @@ func GetPermissionByUsername(username string) model.UserEncepyt {
 
 	}
 
+	if len(roles) > 0 {
+		var approver []model.ApproverCheck
+		fmt.Println(roles[0].EMPLOYEE_CODE)
+		resultsApprover, errorResultsApprover := db.Query(`SELECT CODE_APPROVER,a.ID_FACTORY,g.ID_GROUP_DEPT,f.FACTORY_NAME,g.NAME_GROUP FROM TBL_APPROVERS  a
+		LEFT JOIN TBL_FACTORY f ON a.ID_FACTORY = f.ID_FACTORY
+		LEFT JOIN TBL_GROUP_DEPT g ON a.ID_GROUP_DEPT = g.ID_GROUP_DEPT
+		WHERE CODE_APPROVER = @code`, sql.Named("code", roles[0].EMPLOYEE_CODE))
+
+		if errorResultsApprover != nil {
+			fmt.Println(errorResultsApprover.Error())
+		} else {
+
+			for resultsApprover.Next() {
+
+				var approverInfo model.ApproverCheck
+
+				errScanApproverInfo := resultsApprover.Scan(
+					&approverInfo.CODE_APPROVER,
+					&approverInfo.ID_FACTORY,
+					&approverInfo.ID_GROUP_DEPT,
+					&approverInfo.FACTORY_NAME,
+					&approverInfo.NAME_GROUP,
+				)
+
+				if errScanApproverInfo != nil {
+					fmt.Println("Row scan failed: " + errScanApproverInfo.Error())
+
+				} else {
+					approver = append(approver, approverInfo)
+				}
+
+			}
+
+		}
+
+		var roleUser model.RoleEncepyt
+		if len(approver) > 0 {
+			roleUser.EMPLOYEE_CODE = approver[0].CODE_APPROVER
+			roleUser.ID_FACTORY = approver[0].ID_FACTORY
+			roleUser.ID_GROUP_DEPT = approver[0].ID_GROUP_DEPT
+			roleUser.FACTORY_NAME = approver[0].FACTORY_NAME
+			roleUser.NAME_GROUP = approver[0].NAME_GROUP
+			roleUser.MAIL = roles[0].MAIL
+			roleUser.REAL_DEPT = roles[0].REAL_DEPT
+			roleUser.NAME_ROLE = "APPROVER"
+			roleUser.FULLNAME = roles[0].FULLNAME
+
+			roles = append(roles, roleUser)
+		}
+	}
+
 	defer rows.Close()
 
 	usersGenToken.EmployeeCode = roles[0].EMPLOYEE_CODE
@@ -240,7 +291,8 @@ func GetApproverByGroupId(c *fiber.Ctx) error {
 		fmt.Println("Error connecting to the database: " + err.Error())
 	}
 
-	queryUser := `SELECT a.CODE_APPROVER,a.NAME_APPROVER,a.ID_GROUP_DEPT,g.NAME_GROUP,a.ROLE,hr.UHR_Position,a.STEP,a.[ID_APPROVER],f.FACTORY_NAME,hr.AD_Mail as MAIL FROM TBL_APPROVERS  a  
+	queryUser := `SELECT a.CODE_APPROVER,a.NAME_APPROVER,a.ID_GROUP_DEPT,g.NAME_GROUP,a.ROLE,hr.UHR_Position,a.STEP,a.[ID_APPROVER],
+f.FACTORY_NAME,hr.AD_Mail as MAIL,f.ID_FACTORY FROM TBL_APPROVERS  a  
 				LEFT JOIN  V_AllUserPSTH hr ON a.CODE_APPROVER 
 				COLLATE Thai_CI_AS = HR.UHR_EmpCode COLLATE Thai_CI_AS 
 				LEFT JOIN TBL_GROUP_DEPT g ON a.ID_GROUP_DEPT = g.ID_GROUP_DEPT
@@ -257,7 +309,7 @@ func GetApproverByGroupId(c *fiber.Ctx) error {
 	for results.Next() {
 		var user model.Approver
 
-		errScan := results.Scan(&user.CODE_APPROVER, &user.NAME_APPROVER, &user.ID_GROUP_DEPT, &user.NAME_GROUP, &user.ROLE, &user.UHR_Position, &user.STEP, &user.ID_APPROVER, &user.FACTORY_NAME, &user.MAIL)
+		errScan := results.Scan(&user.CODE_APPROVER, &user.NAME_APPROVER, &user.ID_GROUP_DEPT, &user.NAME_GROUP, &user.ROLE, &user.UHR_Position, &user.STEP, &user.ID_APPROVER, &user.FACTORY_NAME, &user.MAIL, &user.ID_FACTORY)
 		if errScan != nil {
 			fmt.Println("Row scan failed: " + errScan.Error())
 

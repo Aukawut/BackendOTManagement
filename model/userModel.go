@@ -40,6 +40,7 @@ type Approver struct {
 	ID_APPROVER   int
 	FACTORY_NAME  string
 	MAIL          string
+	ID_FACTORY    int
 }
 
 type ApproverRequest struct {
@@ -159,4 +160,12 @@ type UserBodyMail struct {
 	EMPLOYEE_CODE string
 	FULLNAME      string
 	DEPARTMENT    interface{}
+}
+
+type ApproverCheck struct {
+	CODE_APPROVER string
+	ID_FACTORY    int
+	ID_GROUP_DEPT int
+	FACTORY_NAME  string
+	NAME_GROUP    string
 }

@@ -26,9 +26,12 @@ func main() {
 	app.Use(cors.New())
 
 	//<------ Request ----->
+
 	app.Post("/request", handler.RequestOvertime)
 	app.Get("/count/request/:code", jwt.DecodeToken, handler.CountRequestByEmpCode)
 	app.Get("/count/requests/:year", jwt.DecodeToken, handler.CountRequestByYear)
+	app.Get("/request/count/:status/:code", jwt.DecodeToken, handler.CountRequestByStatusAndCode)
+	app.Get("/request/approve/count/:status/:code", jwt.DecodeToken, handler.CountRequestStatusAndApproveByCode)
 	app.Put("/request/update/:requestNo/:rev", jwt.DecodeToken, handler.ApproveRequestByNo)
 	app.Put("/request/cancel/:requestNo", jwt.DecodeToken, handler.CancelRequestByReqNo)
 	app.Post("/rewrite/request", jwt.DecodeToken, handler.RewiteRequestOvertime)
@@ -36,8 +39,13 @@ func main() {
 	app.Get("/menu/month/:year", jwt.DecodeToken, handler.GetMonthMenu)
 	app.Get("/user/requests/:code", jwt.DecodeToken, handler.GetRequestByEmpCode)
 	app.Get("/summary/request/last/all", jwt.DecodeToken, handler.SummaryLastRevRequestAll)
-	app.Get("/summary/request/lasted/:reqNo", jwt.DecodeToken, handler.SummaryLastRevRequestAllByReqNo)
+	app.Get("/summary/request/:reqNo/:rev", jwt.DecodeToken, handler.SummaryLastRevRequestAllByReqNo)
 	app.Get("/comment/request/:requestNo/:rev", jwt.DecodeToken, handler.GetApproverCommentByRequestNo)
+	app.Get("/lasted/request/:status/:code", jwt.DecodeToken, handler.GetRequestListByStatusApprove)
+	app.Get("/details/request/:status/:code", jwt.DecodeToken, handler.GetRequestListByStatusApproveAndCode)
+	app.Get("/lasted/user/request/:status/:code", jwt.DecodeToken, handler.GetUserRequestListByStatusPendApprove)
+	app.Get("/details/user/request/:status/:code", jwt.DecodeToken, handler.GetUserRequestListByStatusApprove)
+	app.Get("/details/old/request/:status/:requestNo/:rev", jwt.DecodeToken, handler.GetDetailOldRequestByStatus)
 
 	app.Get("/pending/request/approver", jwt.DecodeToken, handler.GetApproverPending)
 	app.Get("/approve/count/:code", jwt.DecodeToken, handler.CountApproveStatusByCode)
@@ -73,10 +81,13 @@ func main() {
 
 	// <----- Factory ------>
 	app.Get("/factory", jwt.DecodeToken, handler.GetAllFactory)
+	app.Post("/factory", jwt.DecodeToken, handler.InsertFactory)
 	app.Get("/factory/:group", jwt.DecodeToken, handler.GetAllFactoryByGroup)
 
 	//<---- Workcell ----->
-	app.Get("/workcell/", jwt.DecodeToken, handler.GetWorkCellByAll)
+	app.Get("/workcell", jwt.DecodeToken, handler.GetWorkCellByAll)
+	app.Post("/workcell", jwt.DecodeToken, handler.InsertWorkcell)
+	app.Put("/workcell/:id", jwt.DecodeToken, handler.UpdateWorkcell)
 	app.Get("/workcell/:group", jwt.DecodeToken, handler.GetWorkCellByGroup)
 	app.Get("/workcell/factory/:id", jwt.DecodeToken, handler.GetWorkcellByFactory)
 
@@ -100,12 +111,21 @@ func main() {
 	// <--- Actual ---->
 	app.Post("/actual/overtime", jwt.DecodeToken, handler.SaveActualOvertime)
 	app.Get("/actual/overtime", jwt.DecodeToken, handler.GetActualOvertime)
+	app.Get("/actual/overtime/:start/:end", jwt.DecodeToken, handler.GetActualByDate)
 	app.Get("/actual/summary/compare/plan/:year", jwt.DecodeToken, handler.SummaryActualComparePlan)
 	app.Get("/actual/summary/factory/plan/:start/:end/:ugroup", jwt.DecodeToken, handler.SummaryActualByDurationAndFac)
 	app.Get("/actual/count/:start/:end/:ugroup", jwt.DecodeToken, handler.GetCountActualOvertime)
 	app.Get("/actual/summary/date/:start/:end/:ugroup", jwt.DecodeToken, handler.SummaryActualByDate)
 	app.Get("/actual/ot/:start/:end/:ugroup/:fac", jwt.DecodeToken, handler.SummaryActualOvertime)
+	app.Get("/actual/factory/:start/:end/:ugroup/:fac", jwt.DecodeToken, handler.SummaryActualOvertimeGroupFac)
+	app.Get("/actual/type/:start/:end/:ugroup/:fac", jwt.DecodeToken, handler.SummaryActualOvertimeByType)
+	app.Get("/actual/bydate/:start/:end/:ugroup/:fac", jwt.DecodeToken, handler.SummaryActualOvertimeByDate)
+	app.Get("/actual/workcell/:requestNo/:rev/:year/:month", jwt.DecodeToken, handler.CalActualByWorkcell)
 	app.Get("/actual/cal/:year/:month/:fac", jwt.DecodeToken, handler.CalActualByFactory)
+	app.Get("/actual/all/workgroup/:start/:end", jwt.DecodeToken, handler.GetActualCompareWorkgroup)
+	app.Get("/actual/group/workcell/:start/:end", jwt.DecodeToken, handler.GetActualCompareGroupWorkCell)
+	app.Get("/actual/group/workgroup/:start/:end", jwt.DecodeToken, handler.GetActualCompareGroupWorkGroup)
+	app.Delete("/actual/:id", jwt.DecodeToken, handler.DeleteActualById)
 
 	app.Post("/permission/user", jwt.DecodeTokenAdmin, handler.InsertUserPermission)
 	app.Put("/permission/user/:id", jwt.DecodeTokenAdmin, handler.UpdateUserPermission)

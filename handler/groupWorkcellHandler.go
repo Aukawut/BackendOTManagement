@@ -27,7 +27,7 @@ func GetAllGroupWorkcell(c *fiber.Ctx) error {
 		fmt.Println("Error connecting to the database: " + err.Error())
 	}
 
-	results, errorQuery := db.Query(`SELECT  ID_WORKGRP,NAME_WORKGRP,[DESC] FROM [dbo].[TBL_WORK_GROUP] ORDER BY ID_WORKGRP ASC`)
+	results, errorQuery := db.Query(`SELECT ID_WORKGRP,NAME_WORKGRP,[DESC] FROM [dbo].[TBL_WORK_GROUP] ORDER BY ID_WORKGRP ASC`)
 
 	if errorQuery != nil {
 		fmt.Println("Query failed: " + errorQuery.Error())
@@ -251,6 +251,61 @@ func UpdateWorkcell(c *fiber.Ctx) error {
 
 		return c.JSON(fiber.Map{"err": false, "msg": "Workcell Updated", "status": "Ok"})
 
+	}
+
+}
+
+func DeleteWorkcell(c *fiber.Ctx) error {
+	id := c.Params("id")
+
+	connString := config.LoadDatabaseConfig()
+
+	db, err := sql.Open("sqlserver", connString)
+
+	if err != nil {
+		fmt.Println("Error creating connection: " + err.Error())
+	}
+	defer db.Close()
+
+	// Test connection
+	err = db.Ping()
+	if err != nil {
+		fmt.Println("Error connecting to the database: " + err.Error())
+	}
+
+	query := `SELECT COUNT(*) FROM TBL_WORKCELL WHERE [ID_WORK_CELL] = @id`
+	var count int
+	err = db.QueryRow(query,
+		sql.Named("id", id),
+	).Scan(&count)
+
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"err": true,
+			"msg": "Error checking workcell: " + err.Error(),
+		})
+	}
+
+	if count > 0 {
+
+		// Delete
+		_, errDelete := db.Exec(`
+		DELETE FROM [dbo].[TBL_WORKCELL] WHERE [ID_WORK_CELL] = @id
+		`,
+			sql.Named("id", id),
+		)
+
+		if errDelete != nil {
+			fmt.Println(errDelete.Error())
+			return c.JSON(fiber.Map{"err": true, "msg": errDelete.Error()})
+		}
+
+		defer db.Close()
+
+		return c.JSON(fiber.Map{"err": false, "msg": "Workcell Deleted", "status": "Ok"})
+	} else {
+
+		return c.JSON(fiber.Map{"err": true, "msg": "Workcell isn't found."})
 	}
 
 }

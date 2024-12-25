@@ -10,6 +10,7 @@ type WorkCellJoinFactory struct {
 	NAME_WORKCELL string
 	ID_FACTORY    int
 	FACTORY_NAME  string
+	ID_WORKGRP    int
 }
 
 type ReqWorkCellBody struct {

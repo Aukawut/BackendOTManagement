@@ -88,6 +88,7 @@ func main() {
 	app.Get("/workcell", jwt.DecodeToken, handler.GetWorkCellByAll)
 	app.Post("/workcell", jwt.DecodeToken, handler.InsertWorkcell)
 	app.Put("/workcell/:id", jwt.DecodeToken, handler.UpdateWorkcell)
+	app.Delete("/workcell/:id", jwt.DecodeToken, handler.DeleteWorkcell)
 	app.Get("/workcell/:group", jwt.DecodeToken, handler.GetWorkCellByGroup)
 	app.Get("/workcell/factory/:id", jwt.DecodeToken, handler.GetWorkcellByFactory)
 
@@ -127,15 +128,20 @@ func main() {
 	app.Get("/actual/group/workgroup/:start/:end", jwt.DecodeToken, handler.GetActualCompareGroupWorkGroup)
 	app.Delete("/actual/:id", jwt.DecodeToken, handler.DeleteActualById)
 
+	//----  Permission ----
 	app.Post("/permission/user", jwt.DecodeTokenAdmin, handler.InsertUserPermission)
 	app.Put("/permission/user/:id", jwt.DecodeTokenAdmin, handler.UpdateUserPermission)
 	app.Delete("/permission/user/:id", jwt.DecodeTokenAdmin, handler.DeleteUserPermission)
 
+	// ----  Employee ----
 	app.Get("/employee", jwt.DecodeTokenAdmin, handler.GetEmployeeAll)
 	app.Post("/employee", jwt.DecodeTokenAdmin, handler.InsertEmployee)
 	app.Put("/employee/:code", jwt.DecodeTokenAdmin, handler.UpdateEmployee)
 	app.Delete("/employee/:code", jwt.DecodeTokenAdmin, handler.DeleteEmployee)
 	app.Get("/employee/:code", jwt.DecodeToken, handler.GetEmployeeByCode)
+
+	// Auth
+	app.Get("/auth", jwt.CheckToken)
 
 	app.Get("/test/:requestNo/:rev", handler.TestApp)
 

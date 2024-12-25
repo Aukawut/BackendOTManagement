@@ -84,8 +84,10 @@ func GetWorkCellByAll(c *fiber.Ctx) error {
 		fmt.Println("Error connecting to the database: " + err.Error())
 	}
 
-	results, errorQuery := db.Query(`SELECT wc.ID_WORK_CELL,wc.NAME_WORKCELL,f.ID_FACTORY,f.FACTORY_NAME FROM TBL_WORKCELL wc LEFT JOIN 
-TBL_FACTORY f ON wc.ID_FACTORY = f.ID_FACTORY ORDER BY [ID_WORK_CELL] DESC`)
+	results, errorQuery := db.Query(`SELECT wc.ID_WORK_CELL,wc.NAME_WORKCELL,f.ID_FACTORY,f.FACTORY_NAME,wc.ID_WORKGRP FROM TBL_WORKCELL wc LEFT JOIN 
+TBL_FACTORY f ON wc.ID_FACTORY = f.ID_FACTORY 
+LEFT JOIN TBL_WORK_GROUP wg ON wc.ID_WORKGRP = wg.ID_WORKGRP
+ORDER BY [ID_WORK_CELL] DESC`)
 
 	if errorQuery != nil {
 		fmt.Println("Query failed: " + errorQuery.Error())
@@ -94,7 +96,7 @@ TBL_FACTORY f ON wc.ID_FACTORY = f.ID_FACTORY ORDER BY [ID_WORK_CELL] DESC`)
 	for results.Next() {
 		var work model.WorkCellJoinFactory
 
-		err := results.Scan(&work.ID_WORK_CELL, &work.NAME_WORKCELL, &work.ID_FACTORY, &work.FACTORY_NAME)
+		err := results.Scan(&work.ID_WORK_CELL, &work.NAME_WORKCELL, &work.ID_FACTORY, &work.FACTORY_NAME, &work.ID_WORKGRP)
 		if err != nil {
 			fmt.Println("Row scan failed: " + err.Error())
 			return c.JSON(fiber.Map{

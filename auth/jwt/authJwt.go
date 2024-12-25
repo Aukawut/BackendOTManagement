@@ -175,3 +175,32 @@ func DecodeTokenAdmin(c *fiber.Ctx) error {
 	// Store decoded claims in context for downstream handlers
 
 }
+
+func CheckToken(c *fiber.Ctx) error {
+	authHeader := c.Get("Authorization")
+
+	if !strings.HasPrefix(authHeader, "Bearer ") {
+		return c.JSON(fiber.Map{
+			"err": true,
+			"msg": "Authorization header must start with 'Bearer '",
+		})
+	}
+
+	token := strings.TrimPrefix(authHeader, "Bearer ")
+	decoded, errToken := VerifyToken(token) // Ensure VerifyToken is implemented correctly
+
+	if errToken != nil {
+		return c.JSON(fiber.Map{
+			"err": true,
+			"msg": errToken.Error(),
+		})
+	}
+
+	// Auth Success
+	return c.JSON(fiber.Map{
+		"err":     false,
+		"msg":     "Auth success",
+		"decoded": decoded,
+	})
+
+}

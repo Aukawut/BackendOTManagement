@@ -1,0 +1,41 @@
+version: '3.8'
+
+services:
+  api-ot-management:
+    image: api-ot-management
+    build: 
+      context: .
+      dockerfile: ./Dockerfile
+    environment:
+      - SECRET_KEY=${SECRET_KEY}
+      - DB_USER=${DB_USER}
+      - DB_SERVER=${DB_SERVER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_NAME=${DB_NAME}
+      - LDAP_SERVER=${LDAP_SERVER}
+      - LDAP_BASEDN=${LDAP_BASEDN}
+      - LDAP_BIND=${LDAP_BIND}
+      - LDAP_PASSWORD_BIND=${LDAP_PASSWORD_BIND}
+      - LDAP_DNS=${LDAP_DNS}
+      - MAIL_ADDRESS=${MAIL_ADDRESS}
+      - MAIL_PASSWORD=${MAIL_PASSWORD}
+      - PORT=${PORT}
+    networks:
+      - app-network-ot
+    restart: always
+
+  nginx-ot:
+    image: nginx:latest
+    volumes:
+      - ./conf.d:/etc/nginx/conf.d
+    depends_on:
+      - api-ot-management
+    ports:
+      - 4860:4860
+    restart: always 
+    networks:
+      - app-network-ot
+
+networks:
+  app-network-ot:
+    driver: bridge

@@ -129,6 +129,7 @@ type OldRequestDetail struct {
 	END_DATE      string
 	ID_TYPE_OT    int
 	ID_WORKGRP    int
+	REMARK        interface{}
 }
 
 type ActualCompareWorkgroup struct {

@@ -333,7 +333,8 @@ func CountRequestByEmpCode(c *fiber.Ctx) error {
 func CancelRequestByReqNo(c *fiber.Ctx) error {
 	strConfig := config.LoadDatabaseConfig()
 	var requestNo = c.Params("requestNo")
-
+	var rev = c.Params("rev")
+	fmt.Println("testing..")
 	user := c.Locals("user").(jwt.MapClaims)
 
 	var resultsCheckApproved []model.ResultCheckApproved
@@ -350,11 +351,11 @@ func CancelRequestByReqNo(c *fiber.Ctx) error {
 		fmt.Println("Error connecting to the database: " + err.Error())
 	}
 
-	results, err := db.Query(`SELECT REQUEST_NO,SUM( CASE WHEN CODE_APPROVER IS NOT NULL THEN  1 ELSE 0 END) as APPROVED_COUNT,REQ_STATUS,STEP,CREATED_BY FROM (
-	SELECT a.REQUEST_NO,r.CREATED_BY,REQ_STATUS,a.CODE_APPROVER,t.STEP FROM [dbo].[TBL_REQUESTS] r
-	LEFT JOIN TBL_APPROVAL a ON r.REQUEST_NO = a.REQUEST_NO
+	results, err := db.Query(`SELECT REQUEST_NO,SUM( CASE WHEN CODE_APPROVER IS NOT NULL THEN  1 ELSE 0 END) as APPROVED_COUNT,REQ_STATUS,STEP FROM (
+	SELECT a.REQUEST_NO,r.CREATED_BY,REQ_STATUS,a.CODE_APPROVER,t.STEP FROM [dbo].[TBL_REQUESTS_HISTORY] r
+	LEFT JOIN TBL_APPROVAL a ON r.REQUEST_NO = a.REQUEST_NO AND r.REV = a.REV
 	LEFT JOIN TBL_OT_TYPE t ON r.ID_TYPE_OT = t.ID_TYPE_OT
-	WHERE  r.REQUEST_NO = @requestNo )m GROUP BY m.REQUEST_NO,CREATED_BY,REQ_STATUS,CODE_APPROVER,STEP`, sql.Named("requestNo", requestNo))
+	WHERE  r.REQUEST_NO = @requestNo AND r.REV = @rev )m GROUP BY m.REQUEST_NO,REQ_STATUS,STEP`, sql.Named("requestNo", requestNo), sql.Named("rev", rev))
 
 	if err != nil {
 		fmt.Println("Query failed: " + err.Error())
@@ -364,7 +365,7 @@ func CancelRequestByReqNo(c *fiber.Ctx) error {
 	for results.Next() {
 		var approved model.ResultCheckApproved
 
-		errScan := results.Scan(&approved.REQUEST_NO, &approved.APPROVED_COUNT, &approved.REQ_STATUS, &approved.STEP, &approved.CREATED_BY)
+		errScan := results.Scan(&approved.REQUEST_NO, &approved.APPROVED_COUNT, &approved.REQ_STATUS, &approved.STEP)
 
 		if errScan != nil {
 			fmt.Println("Row scan failed: " + errScan.Error())
@@ -379,7 +380,6 @@ func CancelRequestByReqNo(c *fiber.Ctx) error {
 		status := resultsCheckApproved[0].REQ_STATUS
 		approvedCount := resultsCheckApproved[0].APPROVED_COUNT
 		step := resultsCheckApproved[0].STEP
-		requestBy := resultsCheckApproved[0].CREATED_BY
 
 		if approvedCount > 0 && approvedCount < step {
 			// return to clinet job approved by some approver.
@@ -392,12 +392,6 @@ func CancelRequestByReqNo(c *fiber.Ctx) error {
 			return c.JSON(fiber.Map{
 				"err": true,
 				"msg": "Request approved by all approver!",
-			})
-		} else if user["employee_code"] != requestBy {
-
-			return c.JSON(fiber.Map{
-				"err": true,
-				"msg": "Permission is't corrected.",
 			})
 		} else if status != 1 && status == 2 {
 			return c.JSON(fiber.Map{
@@ -426,13 +420,23 @@ func CancelRequestByReqNo(c *fiber.Ctx) error {
 		} else {
 
 			// Update Status to Cencel
-			stmtCancel := `UPDATE TBL_REQUESTS 
+			stmtCancel := `UPDATE [TBL_REQUESTS] 
                 SET REQ_STATUS = 4, UPDATED_AT = GETDATE(), UPDATED_BY = @actionBy 
                 WHERE REQUEST_NO = @requestNo`
 
-			update, errUpdate := db.Exec(stmtCancel,
+			stmtCancelHistory := `UPDATE [TBL_REQUESTS_HISTORY] 
+                SET REQ_STATUS = 4, UPDATED_AT = GETDATE(), UPDATED_BY = @actionBy 
+                WHERE REQUEST_NO = @requestNo AND [REV] = @rev`
+
+			_, errUpdate := db.Exec(stmtCancel,
 				sql.Named("requestNo", requestNo),
 				sql.Named("actionBy", user["employee_code"]))
+
+			_, errUpdateHistory := db.Exec(stmtCancelHistory,
+				sql.Named("requestNo", requestNo),
+				sql.Named("rev", rev),
+				sql.Named("actionBy", user["employee_code"]),
+			)
 
 			if errUpdate != nil {
 				return c.JSON(fiber.Map{
@@ -440,21 +444,10 @@ func CancelRequestByReqNo(c *fiber.Ctx) error {
 					"msg": errUpdate.Error(), // Use errUpdate instead of err
 				})
 			}
-
-			// Retrieve RowsAffected and handle error
-			rowsAffected, errRows := update.RowsAffected()
-			if errRows != nil {
+			if errUpdateHistory != nil {
 				return c.JSON(fiber.Map{
 					"err": true,
-					"msg": errRows.Error(),
-				})
-			}
-
-			// Check if any rows were updated
-			if rowsAffected == 0 {
-				return c.JSON(fiber.Map{
-					"err": true,
-					"msg": "No rows were updated. Request might not exist or already processed.",
+					"msg": errUpdateHistory.Error(), // Use errUpdate instead of err
 				})
 			}
 
@@ -2140,7 +2133,7 @@ func GetDetailOldRequestByStatus(c *fiber.Ctx) error {
 		fmt.Println("Error connecting to the database: " + err.Error())
 	}
 
-	stmt := `SELECT REQUEST_NO,REV,ID_FACTORY,ID_GROUP_DEPT,ID_WORK_CELL,START_DATE,END_DATE,ID_TYPE_OT,ID_WORKGRP FROM TBL_REQUESTS_HISTORY 
+	stmt := `SELECT REQUEST_NO,REV,ID_FACTORY,ID_GROUP_DEPT,ID_WORK_CELL,START_DATE,END_DATE,ID_TYPE_OT,ID_WORKGRP,REMARK FROM TBL_REQUESTS_HISTORY 
 WHERE REQUEST_NO = @requestNo AND REV = @rev AND REQ_STATUS = @status`
 
 	rows, errSelect := db.Query(stmt, sql.Named("requestNo", requestNo), sql.Named("rev", rev), sql.Named("status", status))
@@ -2165,6 +2158,7 @@ WHERE REQUEST_NO = @requestNo AND REV = @rev AND REQ_STATUS = @status`
 			&info.END_DATE,
 			&info.ID_TYPE_OT,
 			&info.ID_WORKGRP,
+			&info.REMARK,
 		)
 
 		if errorScan != nil {

@@ -33,7 +33,7 @@ func main() {
 	app.Get("/request/count/:status/:code", jwt.DecodeToken, handler.CountRequestByStatusAndCode)
 	app.Get("/request/approve/count/:status/:code", jwt.DecodeToken, handler.CountRequestStatusAndApproveByCode)
 	app.Put("/request/update/:requestNo/:rev", jwt.DecodeToken, handler.ApproveRequestByNo)
-	app.Put("/request/cancel/:requestNo", jwt.DecodeToken, handler.CancelRequestByReqNo)
+	app.Put("/request/cancel/:requestNo/:rev", jwt.DecodeToken, handler.CancelRequestByReqNo)
 	app.Post("/rewrite/request", jwt.DecodeToken, handler.RewiteRequestOvertime)
 	app.Get("/menu/year", jwt.DecodeToken, handler.GetYearMenu)
 	app.Get("/menu/month/:year", jwt.DecodeToken, handler.GetMonthMenu)

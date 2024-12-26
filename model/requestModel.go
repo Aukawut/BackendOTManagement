@@ -42,7 +42,6 @@ type ResultCheckApproved struct {
 	APPROVED_COUNT int
 	REQ_STATUS     int
 	STEP           int
-	CREATED_BY     string
 }
 
 type ResultRequestByUser struct {

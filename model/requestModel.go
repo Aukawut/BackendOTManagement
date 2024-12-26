@@ -17,8 +17,7 @@ type RequestOvertimeBody struct {
 	WorkCell          int           `json:"workcell"`
 }
 
-type RewriteRequestOvertimeBody struct {
-	OvertimeDate  string        `json:"overtimeDate"`
+type ReviseRequestOvertimeBody struct {
 	OvertimeType  int           `json:"overtimeType"`
 	GroupDept     int           `json:"group"`
 	Factory       int           `json:"factory"`
@@ -30,6 +29,7 @@ type RewriteRequestOvertimeBody struct {
 	GroupWorkCell int           `json:"groupworkcell"`
 	WorkCell      int           `json:"workcell"`
 	RequestNo     string        `json:"requestNo"`
+	Rev           int           `json:"rev"`
 }
 
 type CountRequest struct {

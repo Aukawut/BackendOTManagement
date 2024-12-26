@@ -64,19 +64,19 @@ type ApproverRequestUpdate struct {
 }
 
 type ResultCountReqByYearMonth struct {
-	AMOUNT_REQ int
-	YEAR_RQ    int
-	MONTH_RQ   int
+	AMOUNT_REQ interface{}
+	YEAR_RQ    interface{}
+	MONTH_RQ   interface{}
 }
 
 type OptionMenuByYear struct {
-	AMOUNT_REQ int
-	YEAR_RQ    int
+	AMOUNT_REQ interface{}
+	YEAR_RQ    interface{}
 }
 
 type OptionMenuMonth struct {
-	AMOUNT_REQ int
-	MONTH_RQ   int
+	AMOUNT_REQ interface{}
+	MONTH_RQ   interface{}
 }
 
 type ListUserByRequest struct {

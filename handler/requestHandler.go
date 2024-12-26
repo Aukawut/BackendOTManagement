@@ -231,7 +231,7 @@ func RequestOvertime(c *fiber.Ctx) error {
 
 			}
 			_, errorUpdate := db.Exec(`UPDATE [dbo].[TBL_APPROVAL] SET [ID_STATUS_APV] = 1 
-			WHERE REQUEST_NO = @reqNo AND [STEP] = 1`, sql.Named("reqNo", running))
+			WHERE REQUEST_NO = @reqNo AND [STEP] = 1 AND [REV] = 1`, sql.Named("reqNo", running))
 			if errorUpdate != nil {
 				fmt.Println("Query failed: " + errResult.Error())
 			}
@@ -355,7 +355,7 @@ func CancelRequestByReqNo(c *fiber.Ctx) error {
 	SELECT a.REQUEST_NO,r.CREATED_BY,REQ_STATUS,a.CODE_APPROVER,t.STEP FROM [dbo].[TBL_REQUESTS_HISTORY] r
 	LEFT JOIN TBL_APPROVAL a ON r.REQUEST_NO = a.REQUEST_NO AND r.REV = a.REV
 	LEFT JOIN TBL_OT_TYPE t ON r.ID_TYPE_OT = t.ID_TYPE_OT
-	WHERE  r.REQUEST_NO = @requestNo AND r.REV = @rev )m GROUP BY m.REQUEST_NO,REQ_STATUS,STEP`, sql.Named("requestNo", requestNo), sql.Named("rev", rev))
+	WHERE  r.REQUEST_NO = @requestNo AND r.REV = @rev)m GROUP BY m.REQUEST_NO,REQ_STATUS,STEP`, sql.Named("requestNo", requestNo), sql.Named("rev", rev))
 
 	if err != nil {
 		fmt.Println("Query failed: " + err.Error())
@@ -463,7 +463,7 @@ func CancelRequestByReqNo(c *fiber.Ctx) error {
 	} else {
 
 		return c.JSON(fiber.Map{
-			"err": true,
+			"err": false,
 			"msg": "Request isn't found!",
 		})
 
@@ -471,8 +471,8 @@ func CancelRequestByReqNo(c *fiber.Ctx) error {
 
 }
 
-func RewiteRequestOvertime(c *fiber.Ctx) error {
-	var req model.RewriteRequestOvertimeBody
+func ReviseRequestOvertime(c *fiber.Ctx) error {
+	var req model.ReviseRequestOvertimeBody
 	var lastRevNo int
 	if err := c.BodyParser(&req); err != nil {
 		return c.JSON(fiber.Map{
@@ -518,13 +518,16 @@ func RewiteRequestOvertime(c *fiber.Ctx) error {
 			}
 
 		}
+		// Not Lasted Revise
+		if lastRevNo != req.Rev {
+			return c.JSON(fiber.Map{"err": true, "msg": "Rev. isn't corrected!"})
+		}
 
 		_, errorInsertHistory := db.Exec(`INSERT INTO [dbo].[TBL_REQUESTS_HISTORY] ([REQUEST_NO],[ID_GROUP_DEPT],
-		[DATE_OT],[REMARK],[REQ_STATUS],[ID_TYPE_OT],[ID_FACTORY],[CREATED_AT],[CREATED_BY],[REV],[START_DATE],[END_DATE],[ID_WORKGRP],[ID_WORK_CELL])
-		VALUES (@reqNo,@group,@date,@remark,@status,@type,@factory,GETDATE(),@actionBy,@rev,@start,@end,@groupWorkcell,@workcell)`,
+		[REMARK],[REQ_STATUS],[ID_TYPE_OT],[ID_FACTORY],[CREATED_AT],[CREATED_BY],[REV],[START_DATE],[END_DATE],[ID_WORKGRP],[ID_WORK_CELL])
+		VALUES (@reqNo,@group,@remark,@status,@type,@factory,GETDATE(),@actionBy,@rev,@start,@end,@groupWorkcell,@workcell)`,
 			sql.Named("reqNo", req.RequestNo),
 			sql.Named("group", req.GroupDept),
-			sql.Named("date", req.OvertimeDate),
 			sql.Named("remark", req.Remark),
 			sql.Named("status", 1), // Pending
 			sql.Named("type", req.OvertimeType),
@@ -579,7 +582,8 @@ func RewiteRequestOvertime(c *fiber.Ctx) error {
 
 			}
 			_, errorUpdate := db.Exec(`UPDATE [dbo].[TBL_APPROVAL] SET [ID_STATUS_APV] = 1 
-			WHERE REQUEST_NO = @reqNo AND [STEP] = 1 AND [REV] = @rev`, sql.Named("reqNo", req.RequestNo), sql.Named("rev", lastRevNo+1))
+			WHERE REQUEST_NO = @reqNo AND [STEP] = 1 AND [REV] = @rev`, sql.Named("reqNo", req.RequestNo),
+				sql.Named("rev", lastRevNo+1))
 			if errorUpdate != nil {
 				fmt.Println("Query failed: " + errResult.Error())
 			}
@@ -587,6 +591,7 @@ func RewiteRequestOvertime(c *fiber.Ctx) error {
 		}
 
 		for j := 0; j < len(users); j++ {
+			fmt.Println(users[j].EmpCode)
 			_, errorInsertUser := db.Exec(`INSERT INTO [dbo].[TBL_USERS_REQ]
 			([EMPLOYEE_CODE],[REQUEST_NO],[CREATED_AT],[CREATED_BY],[REV]) VALUES (@code,@reqNo,GETDATE(),@actionBy,@rev)`,
 				sql.Named("code", users[j].EmpCode),
@@ -603,11 +608,10 @@ func RewiteRequestOvertime(c *fiber.Ctx) error {
 
 		// <-- Execute Insert Request -->
 		_, errInsert := db.Exec(`UPDATE [dbo].[TBL_REQUESTS] SET [ID_GROUP_DEPT] = @group,
-		[DATE_OT] = @date,[REMARK] = @remark,[REQ_STATUS] = @status,
+		[REMARK] = @remark,[REQ_STATUS] = @status,
 		[ID_TYPE_OT] = @type,[ID_FACTORY] = @factory,[UPDATED_AT] = GETDATE(),[UPDATED_BY] = @actionBy,
 		[START_DATE] = @start,[END_DATE] = @end,[ID_WORKGRP] = @groupWorkcell,[ID_WORK_CELL] = @workcell WHERE [REQUEST_NO] = @reqNo`,
 			sql.Named("group", req.GroupDept),
-			sql.Named("date", req.OvertimeDate),
 			sql.Named("remark", req.Remark),
 			sql.Named("status", 1), // Pending
 			sql.Named("type", req.OvertimeType),
@@ -624,9 +628,28 @@ func RewiteRequestOvertime(c *fiber.Ctx) error {
 			fmt.Println("Query failed: " + errInsert.Error())
 		}
 
+		_, errorUpdate := db.Exec(`UPDATE [dbo].[TBL_APPROVAL] SET [ID_STATUS_APV] = 1 
+			WHERE REQUEST_NO = @reqNo AND [STEP] = 1 AND [REV] = @rev`,
+			sql.Named("reqNo", req.RequestNo),
+			sql.Named("rev", lastRevNo+1))
+
+		if errorUpdate != nil {
+			fmt.Println("Query failed: " + errResult.Error())
+		}
+
+		mail := CheckSendEmail(lastRevNo+1, req.RequestNo)
+
+		if mail.Email != "N/A" {
+
+			SendEMailToApprover(req.RequestNo, lastRevNo+1, mail.Email, mail.FULLNAME)
+		} else {
+
+			fmt.Println("E-mail address isn't found.")
+		}
+
 		return c.JSON(fiber.Map{
 			"err":    false,
-			"msg":    "Rewrited successfully!",
+			"msg":    "Revised successfully!",
 			"status": "Ok",
 		})
 
@@ -1265,21 +1288,22 @@ func CountApproveStatusByCode(c *fiber.Ctx) error {
 		fmt.Println("Error connecting to the database: " + err.Error())
 	}
 
-	query := `WITH CTE_MASTER AS (
-				SELECT ms.ID_STATUS_APV,ms.NAME_STATUS,COUNT(*) as AMOUNT FROM (
-				SELECT DISTINCT m.REQUEST_NO,s.NAME_STATUS,g.NAME_GROUP,f.FACTORY_NAME,apv.CODE_APPROVER,m.ID_STATUS_APV FROM (
-				SELECT a.* FROM TBL_APPROVAL a RIGHT JOIN (SELECT MAX(REV) as REV,REQUEST_NO  FROM TBL_APPROVAL GROUP BY  REQUEST_NO) b
-				ON a.REQUEST_NO = b.REQUEST_NO AND a.REV = b.REV ) m
-				LEFT JOIN TBL_REQUESTS r ON m.REQUEST_NO = r.REQUEST_NO
-				LEFT JOIN TBL_FACTORY f ON r.ID_FACTORY = f.ID_FACTORY
-				LEFT JOIN TBL_GROUP_DEPT g ON r.ID_GROUP_DEPT = g.ID_GROUP_DEPT
-				LEFT JOIN TBL_APPROVERS apv ON r.ID_GROUP_DEPT = apv.ID_GROUP_DEPT 
-				AND r.ID_FACTORY = apv.ID_FACTORY
-				LEFT JOIN TBL_APPROVE_STATUS s ON m.ID_STATUS_APV = s.ID_STATUS_APV
-				WHERE  apv.CODE_APPROVER = @code ) ms GROUP BY ms.ID_STATUS_APV,ms.NAME_STATUS )
-				SELECT ast.NAME_STATUS,ast.ID_STATUS_APV,ISNULL(c.AMOUNT,0) as [AMOUNT] FROM CTE_MASTER  c 
-				RIGHT JOIN TBL_APPROVE_STATUS ast
-				ON  c.ID_STATUS_APV = ast.ID_STATUS_APV`
+	query := `SELECT asp.NAME_STATUS,asp.ID_STATUS_APV,ISNULL(app.AMOUNT,0) as [AMOUNT] 
+						FROM TBL_APPROVE_STATUS asp LEFT JOIN (
+							SELECT m.CODE_APPROVER,m.ID_STATUS_APV,m.NAME_STATUS,COUNT(*) as [AMOUNT] FROM (
+							SELECT 
+							  ap.REQUEST_NO,ap.REV,ISNULL(ap.ID_STATUS_APV,0) as ID_STATUS_APV,apv.CODE_APPROVER,
+							  ISNULL(s.NAME_STATUS,'N/A') as [NAME_STATUS] FROM TBL_APPROVAL ap LEFT JOIN 
+							  TBL_REQUESTS_HISTORY h ON ap.REQUEST_NO = h.REQUEST_NO
+							  AND ap.REV = h.REV
+							  LEFT JOIN TBL_APPROVERS  apv 
+							  ON h.ID_GROUP_DEPT = apv.ID_GROUP_DEPT
+							  AND h.ID_FACTORY = apv.ID_FACTORY
+							  LEFT JOIN TBL_APPROVE_STATUS s ON ap.ID_STATUS_APV = s.ID_STATUS_APV
+							  ) m 
+							  WHERE m.CODE_APPROVER = @code
+							  GROUP BY m.CODE_APPROVER,m.ID_STATUS_APV,m.NAME_STATUS ) app 
+						ON asp.ID_STATUS_APV = app.ID_STATUS_APV ORDER BY asp.ID_STATUS_APV ASC`
 
 	results, errorQuery := db.Query(query, sql.Named("code", empCode)) //Query
 
@@ -1917,18 +1941,25 @@ func GetUserRequestListByStatusApprove(c *fiber.Ctx) error {
 		fmt.Println("Error connecting to the database: " + err.Error())
 	}
 
-	stmt := `SELECT mt.*,mt.PERSON * mt.DURATION as HOURS_TOTAL FROM (
-	SELECT h.REQUEST_NO,h.REV,f.FACTORY_NAME,t.ID_TYPE_OT,CONCAT('OT',t.HOURS_AMOUNT) as HOURS_AMOUNT,p.PERSON,CAST(DATEDIFF(MINUTE,h.START_DATE,h.END_DATE)/60 as decimal(18,2)) as DURATION  
-	FROM TBL_REQUESTS_HISTORY h
-	LEFT JOIN TBL_FACTORY f ON h.ID_FACTORY = f.ID_FACTORY
-	LEFT JOIN TBL_OT_TYPE t ON h.ID_TYPE_OT = t.ID_TYPE_OT
+	stmt := `SELECT ms.REQUEST_NO,ms.REV,ar.FACTORY_NAME,ar.ID_TYPE_OT,ar.HOURS_AMOUNT,ar.PERSON,ar.DURATION,ar.HOURS_TOTAL FROM (
+SELECT MAX(ht.REV) as REV,
+ht.REQUEST_NO FROM TBL_REQUESTS_HISTORY ht GROUP BY ht.REQUEST_NO ) ms
+LEFT JOIN (
+	SELECT mt.*,mt.PERSON * mt.DURATION as HOURS_TOTAL FROM (
+		SELECT h.REQUEST_NO,h.REV,f.FACTORY_NAME,t.ID_TYPE_OT,
+		CONCAT('OT',t.HOURS_AMOUNT) as HOURS_AMOUNT,p.PERSON,
+		CAST(DATEDIFF(MINUTE,h.START_DATE,h.END_DATE)/60 as decimal(18,2)) as DURATION  
+		FROM TBL_REQUESTS_HISTORY h
+		LEFT JOIN TBL_FACTORY f ON h.ID_FACTORY = f.ID_FACTORY
+		LEFT JOIN TBL_OT_TYPE t ON h.ID_TYPE_OT = t.ID_TYPE_OT
 	
-	LEFT JOIN (
-	SELECT COUNT(*) as PERSON,REQUEST_NO,REV FROM TBL_USERS_REQ u GROUP BY REQUEST_NO,REV
-	) p 
-	ON h.REQUEST_NO = p.REQUEST_NO AND h.REV = p.REV 
-	WHERE h.CREATED_BY = @code AND h.REQ_STATUS = @status
-	) mt`
+		LEFT JOIN (
+		SELECT COUNT(*) as PERSON,REQUEST_NO,REV FROM TBL_USERS_REQ u GROUP BY REQUEST_NO,REV
+		) p 
+		ON h.REQUEST_NO = p.REQUEST_NO AND h.REV = p.REV 
+		WHERE h.CREATED_BY = @code AND h.REQ_STATUS = @status
+		) mt 
+	) ar ON ms.REQUEST_NO = ar.REQUEST_NO AND ms.REV = ar.REV`
 
 	rows, errSelect := db.Query(stmt, sql.Named("code", code), sql.Named("status", status))
 

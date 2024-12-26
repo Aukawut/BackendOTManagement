@@ -143,7 +143,7 @@ func main() {
 	// Auth
 	app.Get("/auth", jwt.CheckToken)
 
-	app.Get("/test/:requestNo/:rev", handler.TestApp)
+	app.Get("/container", handler.TestApp)
 
 	PORT := os.Getenv("PORT")
 

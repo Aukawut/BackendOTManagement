@@ -3,6 +3,7 @@ package handler
 import (
 	"database/sql"
 	"fmt"
+	"os"
 	"strconv"
 
 	"gitgub.com/Aukawut/ServerOTManagement/config"
@@ -154,8 +155,8 @@ func CheckSendEmail(rev int, requestNo string) MailReturn {
 func TestApp(c *fiber.Ctx) error {
 
 	rev, _ := strconv.Atoi(c.Params("rev"))
-
+	name, _ := os.Hostname()
 	CheckSendEmail(rev, c.Params("requestNo"))
 
-	return c.JSON(fiber.Map{"err": false, "msg": "123"})
+	return c.JSON(fiber.Map{"err": false, "msg": "Hello", "container": name})
 }

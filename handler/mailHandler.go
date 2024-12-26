@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"crypto/tls"
 	"database/sql"
 	"fmt"
 	"os"
@@ -263,9 +264,13 @@ WHERE REQUEST_NO = @requestNo AND REV = @rev`
 	message.SetHeader("Subject", subject)
 	message.SetBody("text/html", body)
 
+	tlsConfig := &tls.Config{
+		InsecureSkipVerify: true, // Skip certificate verification
+	}
+
 	// Create a new SMTP dialer
 	dialer := gomail.NewDialer(smtpHost, smtpPort, emailSender, password)
-
+	dialer.TLSConfig = tlsConfig
 	// Send the email
 	if err := dialer.DialAndSend(message); err != nil {
 
@@ -530,9 +535,13 @@ WHERE REQUEST_NO = @requestNo AND REV = @rev`
 	message.SetHeader("Subject", subject)
 	message.SetBody("text/html", body)
 
+	tlsConfig := &tls.Config{
+		InsecureSkipVerify: true, // Skip certificate verification
+	}
+
 	// Create a new SMTP dialer
 	dialer := gomail.NewDialer(smtpHost, smtpPort, emailSender, password)
-
+	dialer.TLSConfig = tlsConfig
 	// Send the email
 	if err := dialer.DialAndSend(message); err != nil {
 

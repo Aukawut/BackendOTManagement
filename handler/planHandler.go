@@ -406,7 +406,7 @@ func GetPlanByFactory(c *fiber.Ctx) error {
 	rows, err := db.Query(`SELECT [YEAR],[MONTH],f.ID_FACTORY,SUM(p.HOURS) as SUM_HOURS FROM TBL_PLAN_OVERTIME p 
 LEFT JOIN TBL_WORKCELL wc ON p.ID_WORK_CELL = wc.ID_WORK_CELL
 LEFT JOIN TBL_FACTORY f ON wc.ID_FACTORY  = f.ID_FACTORY
-WHERE  [YEAR] = @year AND [MONTH] = @month AND f.ID_FACTORY = @factory
+WHERE  [YEAR] = @year AND [MONTH] = @month AND f.ID_FACTORY = @factory AND STATUS_ACTIVE = 'Y'
 GROUP BY [YEAR],[MONTH],f.ID_FACTORY`, sql.Named("year", year), sql.Named("month", month), sql.Named("factory", id))
 
 	if err != nil {
@@ -465,8 +465,8 @@ func GetPlanByWorkcell(c *fiber.Ctx) error {
 	rows, err := db.Query(`SELECT [YEAR],[MONTH],f.ID_FACTORY,SUM(p.HOURS) as SUM_HOURS FROM TBL_PLAN_OVERTIME p 
 LEFT JOIN TBL_WORKCELL wc ON p.ID_WORK_CELL = wc.ID_WORK_CELL
 LEFT JOIN TBL_FACTORY f ON wc.ID_FACTORY  = f.ID_FACTORY
-WHERE  [YEAR] = @year AND [MONTH] = @month AND p.ID_WORK_CELL = @work
-GROUP BY [YEAR],[MONTH],f.ID_FACTORY`, sql.Named("year", year), sql.Named("month", month), sql.Named("work", id))
+WHERE  [YEAR] = @year AND [MONTH] = @month AND p.ID_WORK_CELL = @work AND STATUS_ACTIVE = 'Y'
+GROUP BY [YEAR],[MONTH],f.ID_FACTORY `, sql.Named("year", year), sql.Named("month", month), sql.Named("work", id))
 
 	if err != nil {
 		fmt.Println("Query failed: " + err.Error())

@@ -534,7 +534,7 @@ WHERE REQUEST_NO = @requestNo AND REV = @rev`
 	message.SetHeader("To", to)
 	message.SetHeader("Subject", subject)
 	message.SetBody("text/html", body)
-
+	
 	tlsConfig := &tls.Config{
 		InsecureSkipVerify: true, // Skip certificate verification
 	}

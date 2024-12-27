@@ -29,7 +29,7 @@ func main() {
 
 	app.Post("/request", handler.RequestOvertime)
 	app.Get("/count/request/:code", jwt.DecodeToken, handler.CountRequestByEmpCode)
-	app.Get("/count/requests/:year", jwt.DecodeToken, handler.CountRequestByYear)
+	app.Get("/count/requests/:year/:code", jwt.DecodeToken, handler.CountRequestByYear)
 	app.Get("/request/count/:status/:code", jwt.DecodeToken, handler.CountRequestByStatusAndCode)
 	app.Get("/request/approve/count/:status/:code", jwt.DecodeToken, handler.CountRequestStatusAndApproveByCode)
 	app.Put("/request/update/:requestNo/:rev", jwt.DecodeToken, handler.ApproveRequestByNo)
@@ -144,6 +144,7 @@ func main() {
 	app.Get("/auth", jwt.CheckToken)
 
 	app.Get("/container", handler.TestApp)
+	app.Get("/mail/:mail", handler.TestingMail)
 
 	PORT := os.Getenv("PORT")
 

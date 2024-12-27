@@ -351,11 +351,12 @@ func CancelRequestByReqNo(c *fiber.Ctx) error {
 		fmt.Println("Error connecting to the database: " + err.Error())
 	}
 
-	results, err := db.Query(`SELECT REQUEST_NO,SUM( CASE WHEN CODE_APPROVER IS NOT NULL THEN  1 ELSE 0 END) as APPROVED_COUNT,REQ_STATUS,STEP FROM (
+	results, err := db.Query(`SELECT REQUEST_NO,SUM( CASE WHEN CODE_APPROVER IS NOT NULL AND REQ_STATUS NOT IN(2,3,4,5) THEN  1 ELSE 0 END) as APPROVED_COUNT,
+REQ_STATUS,STEP FROM (
 	SELECT a.REQUEST_NO,r.CREATED_BY,REQ_STATUS,a.CODE_APPROVER,t.STEP FROM [dbo].[TBL_REQUESTS_HISTORY] r
 	LEFT JOIN TBL_APPROVAL a ON r.REQUEST_NO = a.REQUEST_NO AND r.REV = a.REV
 	LEFT JOIN TBL_OT_TYPE t ON r.ID_TYPE_OT = t.ID_TYPE_OT
-	WHERE  r.REQUEST_NO = @requestNo AND r.REV = @rev)m GROUP BY m.REQUEST_NO,REQ_STATUS,STEP`, sql.Named("requestNo", requestNo), sql.Named("rev", rev))
+	WHERE  r.REQUEST_NO = @requestNo AND r.REV = @rev )m GROUP BY m.REQUEST_NO,REQ_STATUS,STEP`, sql.Named("requestNo", requestNo), sql.Named("rev", rev))
 
 	if err != nil {
 		fmt.Println("Query failed: " + err.Error())
@@ -409,12 +410,6 @@ func CancelRequestByReqNo(c *fiber.Ctx) error {
 			return c.JSON(fiber.Map{
 				"err": true,
 				"msg": "Can't cancel Request No: Canceled.",
-			})
-
-		} else if status != 1 && status == 5 {
-			return c.JSON(fiber.Map{
-				"err": true,
-				"msg": "Can't cancel Request No: Rejected.",
 			})
 
 		} else {
@@ -666,6 +661,7 @@ func CountRequestByYear(c *fiber.Ctx) error {
 	info := []model.ResultCountReqByYearMonth{}
 
 	var year = c.Params("year")
+	var code = c.Params("code")
 
 	connString := config.LoadDatabaseConfig()
 
@@ -686,11 +682,15 @@ func CountRequestByYear(c *fiber.Ctx) error {
 			SELECT a.*,b.EMPLOYEE_CODE,r.REQ_STATUS,CONVERT(DATE,r.START_DATE) as DATE_OT FROM (
 			SELECT REQUEST_NO,MAX(REV) as REV FROM TBL_USERS_REQ GROUP BY REQUEST_NO ) a
 			LEFT JOIN TBL_USERS_REQ b ON  a.REQUEST_NO = b.REQUEST_NO AND a.REV = b.REV 
-			LEFT JOIN TBL_REQUESTS r ON a.REQUEST_NO = r.REQUEST_NO ) m
+			LEFT JOIN (
+				SELECT * FROM TBL_REQUESTS_HISTORY WHERE 
+					REV IN (SELECT MAX(REV) FROM TBL_REQUESTS_HISTORY GROUP BY REQUEST_NO)  AND
+					CREATED_BY = @code AND REQ_STATUS = 2
+			) r ON a.REQUEST_NO = r.REQUEST_NO ) m
 			WHERE YEAR(m.DATE_OT) = @year
 			GROUP BY YEAR(m.DATE_OT),MONTH(m.DATE_OT) ORDER BY MONTH(m.DATE_OT) DESC`
 
-	results, errorQueryser := db.Query(queryUser, sql.Named("year", year)) //Query
+	results, errorQueryser := db.Query(queryUser, sql.Named("code", code), sql.Named("year", year)) //Query
 
 	if errorQueryser != nil {
 		fmt.Println("Query failed: " + errorQueryser.Error())
@@ -1361,7 +1361,7 @@ func GetRequestListByCodeAndStatus(c *fiber.Ctx) error {
 
 	query := `SELECT REQUEST_NO,CODE_APPROVER,REV,FACTORY_NAME,NAME_GROUP,ID_FACTORY,ID_GROUP_DEPT,COUNT_USER,DURATION,HOURS_AMOUNT,SUM_MINUTE,MINUTE_TOTAL  
 				FROM [dbo].[Func_GetLists_Status_And_Empc] (@code, @status) a
-				ORDER BY REQUEST_NO`
+				ORDER BY REQUEST_NO DESC`
 
 	results, errorQuery := db.Query(query, sql.Named("code", empCode), sql.Named("status", status)) //Query
 
@@ -1707,7 +1707,7 @@ func GetRequestListByStatusApprove(c *fiber.Ctx) error {
     LEFT JOIN (SELECT COUNT(*) as PERSON,REQUEST_NO,REV FROM TBL_USERS_REQ u GROUP BY REQUEST_NO,REV) p 
 	ON m.REQUEST_NO = p.REQUEST_NO AND m.REV = p.REV
 	LEFT JOIN (SELECT REQUEST_NO,REV,CAST(DATEDIFF(MINUTE,START_DATE,END_DATE)/60 as decimal(18,2)) as DURATION 
-	FROM TBL_REQUESTS_HISTORY) du ON m.REQUEST_NO = du.REQUEST_NO AND m.REV = du.REV`
+	FROM TBL_REQUESTS_HISTORY) du ON m.REQUEST_NO = du.REQUEST_NO AND m.REV = du.REV ORDER BY REQUEST_NO DESC`
 
 	rows, errSelect := db.Query(stmt, sql.Named("code", code), sql.Named("status", status))
 
@@ -1941,7 +1941,7 @@ func GetUserRequestListByStatusApprove(c *fiber.Ctx) error {
 		fmt.Println("Error connecting to the database: " + err.Error())
 	}
 
-	stmt := `SELECT ms.REQUEST_NO,ms.REV,ar.FACTORY_NAME,ar.ID_TYPE_OT,ar.HOURS_AMOUNT,ar.PERSON,ar.DURATION,ar.HOURS_TOTAL FROM (
+	stmt := `SELECT  ms.REQUEST_NO,ms.REV,ar.FACTORY_NAME,ar.ID_TYPE_OT,ar.HOURS_AMOUNT,ar.PERSON,ar.DURATION,ar.HOURS_TOTAL FROM (
 SELECT MAX(ht.REV) as REV,
 ht.REQUEST_NO FROM TBL_REQUESTS_HISTORY ht GROUP BY ht.REQUEST_NO ) ms
 LEFT JOIN (
@@ -1959,7 +1959,7 @@ LEFT JOIN (
 		ON h.REQUEST_NO = p.REQUEST_NO AND h.REV = p.REV 
 		WHERE h.CREATED_BY = @code AND h.REQ_STATUS = @status
 		) mt 
-	) ar ON ms.REQUEST_NO = ar.REQUEST_NO AND ms.REV = ar.REV`
+	) ar ON ms.REQUEST_NO = ar.REQUEST_NO AND ms.REV = ar.REV WHERE FACTORY_NAME IS NOT NULL ORDER BY REQUEST_NO DESC`
 
 	rows, errSelect := db.Query(stmt, sql.Named("code", code), sql.Named("status", status))
 

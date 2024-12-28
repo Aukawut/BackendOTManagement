@@ -854,13 +854,14 @@ func InsertEmployee(c *fiber.Ctx) error {
 func UpdateEmployee(c *fiber.Ctx) error {
 	var req model.BodyUpdateEmployee
 	code := c.Params("code")
-
 	if err := c.BodyParser(&req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"err": true,
 			"msg": "Invalid request body",
 		})
 	}
+	fmt.Println(req)
+	fmt.Println(code)
 
 	if req.ActionBy == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{

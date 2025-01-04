@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"crypto/tls"
 	"database/sql"
 	"fmt"
 	"os"
@@ -188,7 +189,7 @@ WHERE REQUEST_NO = @requestNo AND REV = @rev`
 	tableUsers += `
 		</tbody>
 	</table>`
-
+	realSender := os.Getenv("MAIL_ADDRESS")
 	emailSender := fmt.Sprintf("Request OT <%s>", os.Getenv("MAIL_ADDRESS"))
 
 	to := "akawut.kamesuwan@prospira.com"
@@ -264,8 +265,8 @@ WHERE REQUEST_NO = @requestNo AND REV = @rev`
 	message.SetBody("text/html", body)
 
 	// Create a new SMTP dialer
-	dialer := gomail.NewDialer(smtpHost, smtpPort, emailSender, password)
-
+	dialer := gomail.NewDialer(smtpHost, smtpPort, realSender, password)
+	dialer.TLSConfig = &tls.Config{InsecureSkipVerify: true}
 	// Send the email
 	if err := dialer.DialAndSend(message); err != nil {
 
@@ -455,7 +456,7 @@ WHERE REQUEST_NO = @requestNo AND REV = @rev`
 	tableUsers += `
 		</tbody>
 	</table>`
-
+	realSender := os.Getenv("MAIL_ADDRESS")
 	emailSender := fmt.Sprintf("Request OT <%s>", os.Getenv("MAIL_ADDRESS"))
 
 	to := "akawut.kamesuwan@prospira.com"
@@ -531,7 +532,8 @@ WHERE REQUEST_NO = @requestNo AND REV = @rev`
 	message.SetBody("text/html", body)
 
 	// Create a new SMTP dialer
-	dialer := gomail.NewDialer(smtpHost, smtpPort, emailSender, password)
+	dialer := gomail.NewDialer(smtpHost, smtpPort, realSender, password)
+	dialer.TLSConfig = &tls.Config{InsecureSkipVerify: true}
 
 	// Send the email
 	if err := dialer.DialAndSend(message); err != nil {

@@ -31,7 +31,7 @@ services:
     depends_on:
       - api-ot-management
     ports:
-      - 4860:4860
+      - 3005:3005
     restart: always 
     networks:
       - app-network-ot

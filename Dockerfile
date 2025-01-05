@@ -15,7 +15,7 @@ COPY . .
 RUN go build -o golangotmanagement .
 
 # Expose the port your app will run on
-EXPOSE 4860
+EXPOSE 3005
 
 ENV SECRET_KEY=${SECRET_KEY}
 ENV DB_USER=${DB_USER}

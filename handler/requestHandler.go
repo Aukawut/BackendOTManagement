@@ -2218,3 +2218,119 @@ WHERE REQUEST_NO = @requestNo AND REV = @rev AND REQ_STATUS = @status`
 	}
 
 }
+
+func GetRequestHistoryByFactory(c *fiber.Ctx) error {
+	var details []model.HistoryRequest
+
+	factory := c.Params("factory")
+	start := c.Params("start")
+	end := c.Params("end")
+
+	strConfig := config.LoadDatabaseConfig()
+	db, err := sql.Open("sqlserver", strConfig)
+	if err != nil {
+		fmt.Println("Error creating connection: " + err.Error())
+	}
+
+	defer db.Close()
+
+	// Test connection
+	err = db.Ping()
+	if err != nil {
+		fmt.Println("Error connecting to the database: " + err.Error())
+	}
+
+	condition := ``
+
+	stmt := fmt.Sprintf(`SELECT [REQUEST_NO]
+	  ,[REV]
+	  ,[START_DATE]
+	  ,[END_DATE]
+	  ,[FACTORY_NAME]
+	  ,[NAME_WORKCELL]
+	  ,[NAME_WORKGRP]
+	  ,[ID_FACTORY]
+	  ,[ID_GROUP_DEPT]
+	  ,[NAME_GROUP]
+	  ,[ID_TYPE_OT]
+	  ,[HOURS_AMOUNT]
+	  ,[NAME_STATUS]
+	  ,[REQUESTOR]
+	  ,[REQUESTOR_NAME]
+	  ,[PERSON]
+	  ,[FINAL_STEP]
+	  ,[STATUS_DESC]
+	  ,[DURATION]
+	  ,[TOTAL_DURATION]
+	  ,[PENDING_APPROVER]
+	  ,[PENDING_CODE]
+  FROM [DB_OT_MANAGEMENT].[dbo].[V_History_Requests] WHERE CONVERT(DATE,START_DATE) BETWEEN '%s' AND '%s'
+  %s ORDER BY REQUEST_NO,REV DESC`, start, end, condition)
+
+	if factory != "all" {
+		condition += ` AND ID_FACTORY  = @factory`
+	}
+
+	rows, errSelect := db.Query(stmt, sql.Named("factory", factory))
+
+	if errSelect != nil {
+		return c.JSON(fiber.Map{
+			"err": true,
+			"msg": errSelect.Error(),
+		})
+	}
+
+	for rows.Next() {
+		var info model.HistoryRequest
+
+		errorScan := rows.Scan(
+			&info.REQUEST_NO,
+			&info.REV,
+			&info.START_DATE,
+			&info.END_DATE,
+			&info.FACTORY_NAME,
+			&info.NAME_WORKCELL,
+			&info.NAME_WORKGRP,
+			&info.ID_FACTORY,
+			&info.ID_GROUP_DEPT,
+			&info.NAME_GROUP,
+			&info.ID_TYPE_OT,
+			&info.HOURS_AMOUNT,
+			&info.NAME_STATUS,
+			&info.REQUESTOR,
+			&info.REQUESTOR_NAME,
+			&info.PERSON,
+			&info.FINAL_STEP,
+			&info.STATUS_DESC,
+			&info.DURATION,
+			&info.TOTAL_DURATION,
+			&info.PENDING_APPROVER,
+			&info.PENDING_CODE,
+		)
+
+		if errorScan != nil {
+			fmt.Println("Error Scan : ", errorScan.Error())
+			return c.JSON(fiber.Map{
+				"err": true,
+				"msg": errorScan.Error(),
+			})
+		} else {
+			details = append(details, info)
+		}
+	}
+
+	if len(details) > 0 {
+		return c.JSON(fiber.Map{
+			"err":     false,
+			"results": details,
+			"status":  "Ok",
+		})
+	} else {
+		return c.JSON(fiber.Map{
+			"err":     true,
+			"results": details,
+			"msg":     "Not Found",
+		})
+	}
+
+}

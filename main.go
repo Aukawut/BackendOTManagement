@@ -46,6 +46,7 @@ func main() {
 	app.Get("/lasted/user/request/:status/:code", jwt.DecodeToken, handler.GetUserRequestListByStatusPendApprove)
 	app.Get("/details/user/request/:status/:code", jwt.DecodeToken, handler.GetUserRequestListByStatusApprove)
 	app.Get("/details/old/request/:status/:requestNo/:rev", jwt.DecodeToken, handler.GetDetailOldRequestByStatus)
+	app.Get("/history/request/:start/:end/:factory", jwt.DecodeToken, handler.GetRequestHistoryByFactory)
 
 	app.Get("/pending/request/approver", jwt.DecodeToken, handler.GetApproverPending)
 	app.Get("/approve/count/:code", jwt.DecodeToken, handler.CountApproveStatusByCode)

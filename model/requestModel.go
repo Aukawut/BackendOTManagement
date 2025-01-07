@@ -137,3 +137,28 @@ type ResponseApproverStepByReq struct {
 type CountRequestByStatus struct {
 	STATUS_PENDING int
 }
+
+type HistoryRequest struct {
+	REQUEST_NO       string
+	REV              int
+	START_DATE       string
+	END_DATE         string
+	FACTORY_NAME     string
+	NAME_WORKCELL    string
+	NAME_WORKGRP     string
+	ID_FACTORY       int
+	ID_GROUP_DEPT    int
+	NAME_GROUP       string
+	ID_TYPE_OT       int
+	HOURS_AMOUNT     string
+	NAME_STATUS      string
+	REQUESTOR        string
+	REQUESTOR_NAME   string
+	PERSON           int
+	FINAL_STEP       int
+	STATUS_DESC      string
+	DURATION         float32
+	TOTAL_DURATION   float32
+	PENDING_APPROVER string
+	PENDING_CODE     string
+}

@@ -3,12 +3,9 @@ package handler
 import (
 	"database/sql"
 	"fmt"
-	"os"
-	"strconv"
 
 	"gitgub.com/Aukawut/ServerOTManagement/config"
 	"gitgub.com/Aukawut/ServerOTManagement/model"
-	"github.com/gofiber/fiber/v2"
 )
 
 type ApproverList struct {
@@ -150,13 +147,4 @@ func CheckSendEmail(rev int, requestNo string) MailReturn {
 		return mailResponse
 	}
 
-}
-
-func TestApp(c *fiber.Ctx) error {
-
-	rev, _ := strconv.Atoi(c.Params("rev"))
-	name, _ := os.Hostname()
-	CheckSendEmail(rev, c.Params("requestNo"))
-
-	return c.JSON(fiber.Map{"err": false, "msg": "Hello", "container": name})
 }

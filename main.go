@@ -143,9 +143,6 @@ func main() {
 	// Auth
 	app.Get("/auth", jwt.CheckToken)
 
-	app.Get("/container", handler.TestApp)
-	app.Get("/mail/:mail", handler.TestingMail)
-
 	PORT := os.Getenv("PORT")
 
 	if PORT == "" {

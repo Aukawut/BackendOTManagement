@@ -71,6 +71,7 @@ func main() {
 
 	app.Get("/group", jwt.DecodeToken, handler.GetGroupDepartment)
 	app.Get("/group/:status", jwt.DecodeToken, handler.GetGroupDepartmentByStatus)
+	app.Get("/search/group/:factory", jwt.DecodeToken, handler.GetGroupIdByFactory)
 
 	//<----- Shift -------->
 	app.Get("/shift", jwt.DecodeToken, handler.GetAllShift)

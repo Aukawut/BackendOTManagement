@@ -183,7 +183,7 @@ func GetAllMainPlan(c *fiber.Ctx) error {
 	}
 
 	// Execute SELECT query
-	rows, err := db.Query(`SELECT mp.ID_PLAN,mp.ID_WORK_CELL,wc.NAME_WORKCELL,f.FACTORY_NAME,ug.NAME_UGROUP,ug.ID_UGROUP,mp.CREATED_AT,mp.[MONTH],
+	rows, err := db.Query(`SELECT mp.ID_PLAN,f.ID_FACTORY,mp.ID_WORK_CELL,wc.NAME_WORKCELL,f.FACTORY_NAME,ug.NAME_UGROUP,ug.ID_UGROUP,mp.CREATED_AT,mp.[MONTH],
 	mp.[YEAR],mp.[HOURS],mp.UPDATED_AT,hr.UHR_FirstName_th as FNAME FROM TBL_PLAN_OVERTIME mp 
 	LEFT JOIN TBL_WORKCELL wc ON mp.ID_WORK_CELL = wc.ID_WORK_CELL
 	LEFT JOIN TBL_FACTORY f ON wc.ID_FACTORY = f.ID_FACTORY 
@@ -201,7 +201,7 @@ func GetAllMainPlan(c *fiber.Ctx) error {
 	for rows.Next() {
 		var result model.ResultMainPlan
 
-		err := rows.Scan(&result.ID_PLAN, &result.ID_WORK_CELL, &result.NAME_WORKCELL, &result.FACTORY_NAME, &result.NAME_UGROUP, &result.ID_UGROUP, &result.CREATED_AT, &result.MONTH, &result.YEAR, &result.HOURS, &result.UPDATED_AT, &result.FNAME)
+		err := rows.Scan(&result.ID_PLAN, &result.ID_FACTORY, &result.ID_WORK_CELL, &result.NAME_WORKCELL, &result.FACTORY_NAME, &result.NAME_UGROUP, &result.ID_UGROUP, &result.CREATED_AT, &result.MONTH, &result.YEAR, &result.HOURS, &result.UPDATED_AT, &result.FNAME)
 		if err != nil {
 			fmt.Println("Row scan failed: " + err.Error())
 			return c.JSON(fiber.Map{

@@ -20,6 +20,7 @@ type BodyPlanOB struct {
 
 type ResultMainPlan struct {
 	ID_PLAN       int
+	ID_FACTORY    int
 	ID_WORK_CELL  int
 	NAME_WORKCELL string
 	FACTORY_NAME  string

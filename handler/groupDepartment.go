@@ -57,6 +57,54 @@ func GetGroupDepartment(c *fiber.Ctx) error {
 	})
 }
 
+func GetGroupIdByFactory(c *fiber.Ctx) error {
+
+	strConfig := config.LoadDatabaseConfig()
+	factory := c.Params("factory")
+	allGroup := []model.GroupDepartmentId{}
+
+	db, err := sql.Open("sqlserver", strConfig)
+	if err != nil {
+		fmt.Println("Error creating connection: " + err.Error())
+	}
+	defer db.Close()
+
+	// Test connection
+	err = db.Ping()
+	if err != nil {
+		fmt.Println("Error connecting to the database: " + err.Error())
+	}
+
+	// Execute SELECT query
+	rows, err := db.Query("SELECT ID_GROUP_DEPT FROM TBL_FACTORY WHERE ID_FACTORY = @factory", sql.Named("factory", factory))
+	if err != nil {
+		fmt.Println("Query failed: " + err.Error())
+	}
+	defer rows.Close()
+
+	// Iterate over the result set
+	for rows.Next() {
+		var group model.GroupDepartmentId
+
+		err := rows.Scan(&group.ID_GROUP_DEPT)
+
+		if err != nil {
+			fmt.Println("Row scan failed: " + err.Error())
+			return c.JSON(fiber.Map{
+				"err": true,
+				"msg": err.Error(),
+			})
+		} else {
+			allGroup = append(allGroup, group)
+		}
+	}
+	return c.JSON(fiber.Map{
+		"err":     false,
+		"status":  "Ok",
+		"results": allGroup,
+	})
+}
+
 func GetGroupDepartmentByStatus(c *fiber.Ctx) error {
 	status := c.Params("status")
 	strConfig := config.LoadDatabaseConfig()

@@ -127,6 +127,7 @@ func main() {
 	app.Get("/actual/all/workgroup/:start/:end", jwt.DecodeToken, handler.GetActualCompareWorkgroup)
 	app.Get("/actual/group/workcell/:start/:end", jwt.DecodeToken, handler.GetActualCompareGroupWorkCell)
 	app.Get("/actual/group/workgroup/:start/:end", jwt.DecodeToken, handler.GetActualCompareGroupWorkGroup)
+	app.Get("/summary/workcell/actual/:year/:month/:idWorkcell", jwt.DecodeToken, handler.SummaryActualByWorkcell)
 	app.Delete("/actual/:id", jwt.DecodeToken, handler.DeleteActualById)
 
 	//----  Permission ----

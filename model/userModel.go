@@ -45,7 +45,6 @@ type Approver struct {
 
 type ApproverRequest struct {
 	EmpCode   string `json:"empCode"`
-	Name      string `json:"name"`
 	GroupID   int    `json:"groupId"`
 	RoleID    int    `json:"roleId"`
 	Step      int    `json:"step"`
@@ -168,4 +167,8 @@ type ApproverCheck struct {
 	ID_GROUP_DEPT int
 	FACTORY_NAME  string
 	NAME_GROUP    string
+}
+
+type ApproverCheckDuplicated struct {
+	FullName string
 }

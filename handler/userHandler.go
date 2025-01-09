@@ -399,6 +399,8 @@ func GetAllApprover(c *fiber.Ctx) error {
 
 func InsertApprover(c *fiber.Ctx) error {
 	var req model.ApproverRequest
+	var approver []model.ApproverCheckDuplicated
+	countDuplicated := 0
 
 	if err := c.BodyParser(&req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -420,37 +422,106 @@ func InsertApprover(c *fiber.Ctx) error {
 	if err != nil {
 		fmt.Println("Error connecting to the database: " + err.Error())
 	}
+	// Check User is users of PSTH
+	stmtCheckUser := `SELECT [UHR_FullName_en] FROM V_AllUserPSTH WHERE UHR_EmpCode = @code`
 
-	// คำสั่ง SQL
-	stmt := `INSERT INTO [dbo].[TBL_APPROVERS] 
-		([CODE_APPROVER], [NAME_APPROVER], [ID_GROUP_DEPT], [ROLE], [STATUS_ACTIVE], [STEP],[ID_FACTORY], [CREATED_AT],[CREATED_BY])
-		VALUES (@empCode, @name, @groupId, @roleId, @active, @step,@factory, GETDATE(),@createBy)`
-	// Execute SQL statement]
-	_, err = db.Exec(stmt,
-		sql.Named("empCode", req.EmpCode),
-		sql.Named("name", req.Name),
-		sql.Named("groupId", req.GroupID),
-		sql.Named("roleId", req.RoleID),
-		sql.Named("active", "Y"),
-		sql.Named("step", req.Step),
-		sql.Named("factory", req.Factory),
-		sql.Named("createBy", req.CreatedBy),
+	rowsUser, errorSelectUser := db.Query(stmtCheckUser,
+		sql.Named("code", req.EmpCode),
 	)
 
-	if err != nil {
-		fmt.Println("Error executing query: " + err.Error())
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+	if errorSelectUser != nil {
+		return c.JSON(fiber.Map{
 			"err": true,
-			"msg": err.Error(),
+			"msg": errorSelectUser.Error(),
 		})
 	}
 
-	// Response
-	return c.JSON(fiber.Map{
-		"err":    false,
-		"msg":    "Approver added successfully",
-		"status": "Ok",
-	})
+	for rowsUser.Next() {
+
+		var user model.ApproverCheckDuplicated
+
+		if err := rowsUser.Scan(&user.FullName); err != nil {
+			return c.JSON(fiber.Map{
+				"err": true,
+				"msg": "Error scanning result: " + err.Error(),
+			})
+		} else {
+			approver = append(approver, user)
+		}
+	}
+
+	if len(approver) > 0 {
+
+		stmtCheck := `SELECT COUNT(*) as [COUNT] FROM [DB_OT_MANAGEMENT].[dbo].[TBL_APPROVERS] 
+	WHERE [ID_GROUP_DEPT] = @groupId AND [ID_FACTORY] = @factory AND STEP = @step`
+
+		rows, errorSelect := db.Query(stmtCheck,
+			sql.Named("groupId", req.GroupID),
+			sql.Named("factory", req.Factory),
+			sql.Named("step", req.Step),
+		)
+
+		if errorSelect != nil {
+			return c.JSON(fiber.Map{
+				"err": true,
+				"msg": errorSelect.Error(),
+			})
+		}
+
+		for rows.Next() {
+
+			if err := rows.Scan(&countDuplicated); err != nil {
+				return c.JSON(fiber.Map{
+					"err": true,
+					"msg": "Error scanning result: " + err.Error(),
+				})
+			}
+		}
+
+		if countDuplicated > 0 {
+			return c.JSON(fiber.Map{
+				"err": true,
+				"msg": "Duplicate record found",
+			})
+		}
+
+		// คำสั่ง SQL
+		stmt := `INSERT INTO [dbo].[TBL_APPROVERS] 
+		([CODE_APPROVER], [NAME_APPROVER], [ID_GROUP_DEPT], [ROLE], [STATUS_ACTIVE], [STEP],[ID_FACTORY], [CREATED_AT],[CREATED_BY])
+		VALUES (@empCode, @name, @groupId, @roleId, @active, @step,@factory, GETDATE(),@createBy)`
+		// Execute SQL statement]
+		_, err = db.Exec(stmt,
+			sql.Named("empCode", req.EmpCode),
+			sql.Named("name", approver[0].FullName),
+			sql.Named("groupId", req.GroupID),
+			sql.Named("roleId", req.RoleID),
+			sql.Named("active", "Y"),
+			sql.Named("step", req.Step),
+			sql.Named("factory", req.Factory),
+			sql.Named("createBy", req.CreatedBy),
+		)
+
+		if err != nil {
+			fmt.Println("Error executing query: " + err.Error())
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"err": true,
+				"msg": err.Error(),
+			})
+		}
+
+		// Response
+		return c.JSON(fiber.Map{
+			"err":    false,
+			"msg":    "Approver added successfully",
+			"status": "Ok",
+		})
+
+	} else {
+		return c.JSON(fiber.Map{
+			"err": true,
+			"msg": "User isn't found.",
+		})
+	}
 
 }
 

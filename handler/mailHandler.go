@@ -192,7 +192,7 @@ WHERE REQUEST_NO = @requestNo AND REV = @rev`
 	realSender := os.Getenv("MAIL_ADDRESS")
 	emailSender := fmt.Sprintf("Request OT <%s>", os.Getenv("MAIL_ADDRESS"))
 
-	to := "akawut.kamesuwan@prospira.com"
+	//to := "akawut.kamesuwan@prospira.com"
 
 	subject := "แจ้งเตือน Request OT - PSTH"
 	body := fmt.Sprintf(`
@@ -245,7 +245,7 @@ WHERE REQUEST_NO = @requestNo AND REV = @rev`
 
 		<div><p> รวมเวลา : %v ชั่วโมง<p></div>
 
-		<div><a href="http://localhost:5173/login">Go to Application</a></div>
+		<div><a href="http://ot-management.psth.com/approve">Go to Application</a></div>
 		</div>
 		</body>
 		</html>
@@ -260,7 +260,7 @@ WHERE REQUEST_NO = @requestNo AND REV = @rev`
 	// Create a new message
 	message := gomail.NewMessage()
 	message.SetHeader("From", emailSender)
-	message.SetHeader("To", to)
+	message.SetHeader("To", mail)
 	message.SetHeader("Subject", subject)
 	message.SetBody("text/html", body)
 
@@ -459,7 +459,7 @@ WHERE REQUEST_NO = @requestNo AND REV = @rev`
 	realSender := os.Getenv("MAIL_ADDRESS")
 	emailSender := fmt.Sprintf("Request OT <%s>", os.Getenv("MAIL_ADDRESS"))
 
-	to := "akawut.kamesuwan@prospira.com"
+	//to := "akawut.kamesuwan@prospira.com"
 
 	subject := "แจ้งเตือน Request OT - PSTH"
 	body := fmt.Sprintf(`
@@ -512,7 +512,7 @@ WHERE REQUEST_NO = @requestNo AND REV = @rev`
 
 		<div><p> รวมเวลา : %v ชั่วโมง<p></div>
 
-		<div><a href="http://localhost:5173/login">Go to Application</a></div>
+		<div><a href="http://ot-management.psth.com/request/me">Go to Application</a></div>
 		</div>
 		</body>
 		</html>
@@ -527,7 +527,7 @@ WHERE REQUEST_NO = @requestNo AND REV = @rev`
 	// Create a new message
 	message := gomail.NewMessage()
 	message.SetHeader("From", emailSender)
-	message.SetHeader("To", to)
+	message.SetHeader("To", mail)
 	message.SetHeader("Subject", subject)
 	message.SetBody("text/html", body)
 

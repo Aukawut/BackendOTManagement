@@ -1255,3 +1255,72 @@ func DeleteActualById(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"err": false, "msg": "Deleted!", "status": "Ok"})
 
 }
+
+func SummaryActualByWorkcell(c *fiber.Ctx) error {
+	var actualAll []model.CalActualByWorkcell
+
+	year := c.Params("year")
+	month := c.Params("month")
+	idWorkcell := c.Params("idWorkcell")
+
+	strConfig := config.LoadDatabaseConfig()
+	db, err := sql.Open("sqlserver", strConfig)
+	if err != nil {
+		fmt.Println("Error creating connection: " + err.Error())
+	}
+
+	defer db.Close()
+
+	// Test connection
+	err = db.Ping()
+	if err != nil {
+		fmt.Println("Error connecting to the database: " + err.Error())
+	}
+
+	stmt := `SELECT SUM(HOURS) as [SUM_HOURS],[WORKCELL_ID] FROM  [dbo].[V_Actual_CompareWorkGroup] 
+WHERE  YEAR(OT_DATE) = @y AND MONTH(OT_DATE) = @m AND WORKCELL_ID = @id
+GROUP BY WORKCELL_ID`
+
+	rows, errSelect := db.Query(stmt, sql.Named("y", year), sql.Named("m", month), sql.Named("id", idWorkcell))
+
+	if errSelect != nil {
+		return c.JSON(fiber.Map{
+			"err": true,
+			"msg": errSelect.Error(),
+		})
+	}
+
+	for rows.Next() {
+		var actual model.CalActualByWorkcell
+
+		errorScan := rows.Scan(
+			&actual.SUM_HOURS,
+			&actual.WORKCELL_ID,
+		)
+
+		if errorScan != nil {
+			fmt.Println("Error Scan : ", errorScan.Error())
+			return c.JSON(fiber.Map{
+				"err": true,
+				"msg": errorScan.Error(),
+			})
+		} else {
+			actualAll = append(actualAll, actual)
+		}
+	}
+
+	if len(actualAll) > 0 {
+		return c.JSON(fiber.Map{
+			"err":     false,
+			"results": actualAll,
+			"status":  "Ok",
+		})
+	} else {
+		return c.JSON(fiber.Map{
+			"err":     true,
+			"results": actualAll,
+			"msg":     "Not Found",
+		})
+	}
+
+}

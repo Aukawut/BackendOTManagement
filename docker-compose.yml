@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   api-ot-management:
     image: api-ot-management

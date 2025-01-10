@@ -115,7 +115,7 @@ func main() {
 	app.Post("/actual/overtime", jwt.DecodeToken, handler.SaveActualOvertime)
 	app.Get("/actual/overtime", jwt.DecodeToken, handler.GetActualOvertime)
 	app.Get("/actual/overtime/:start/:end", jwt.DecodeToken, handler.GetActualByDate)
-	app.Get("/actual/summary/compare/plan/:year", jwt.DecodeToken, handler.SummaryActualComparePlan)
+	app.Get("/actual/summary/compare/plan/:year/:ugroup", jwt.DecodeToken, handler.SummaryActualComparePlan)
 	app.Get("/actual/summary/factory/plan/:start/:end/:ugroup", jwt.DecodeToken, handler.SummaryActualByDurationAndFac)
 	app.Get("/actual/count/:start/:end/:ugroup", jwt.DecodeToken, handler.GetCountActualOvertime)
 	app.Get("/actual/summary/date/:start/:end/:ugroup", jwt.DecodeToken, handler.SummaryActualByDate)

@@ -248,6 +248,7 @@ func GetActualByDate(c *fiber.Ctx) error {
 func SummaryActualComparePlan(c *fiber.Ctx) error {
 	var actualAll []model.SummaryActualComparePlan
 	year := c.Params("year")
+	ugroup := c.Params("ugroup")
 
 	strConfig := config.LoadDatabaseConfig()
 	db, err := sql.Open("sqlserver", strConfig)
@@ -263,7 +264,7 @@ func SummaryActualComparePlan(c *fiber.Ctx) error {
 		fmt.Println("Error connecting to the database: " + err.Error())
 	}
 
-	rows, errSelect := db.Query(`EXEC sProcSummaryActualByYear 1,@year`, sql.Named("year", year))
+	rows, errSelect := db.Query(`EXEC sProcSummaryActualByYear @ugroup,@year`, sql.Named("ugroup", ugroup), sql.Named("year", year))
 
 	if errSelect != nil {
 		return c.JSON(fiber.Map{
